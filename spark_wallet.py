@@ -689,7 +689,7 @@ class SparkWalletManager:
 
     async def get_wallet_balance(self, wallet_address: str) -> Dict[str, Any]:
         """
-        Получить баланс кошелька SPARK через utxo.fun API (REAL-TIME из транзакций!)
+        Получить баланс кошелька SPARK через utxo.fun API (ПРАВИЛЬНЫЙ ENDPOINT!)
         
         Args:
             wallet_address: SPARK адрес кошелька (spark1...)
@@ -697,17 +697,18 @@ class SparkWalletManager:
         Returns:
             Словарь с балансом в сатоши и токенах
         """
-        # ИСПОЛЬЗУЕМ REAL-TIME API - вычисляем баланс из транзакций!
+        # ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЙ API ENDPOINT - /address/{wallet_address}?network=MAINNET
+        # Этот endpoint возвращает btcSoftBalanceSats - ТОЧНЫЙ баланс кошелька!
         try:
             import httpx
             import time
             
             timestamp = int(time.time())
             
-            # Получаем транзакции (это real-time, без кеша!)
-            tx_api_url = f"https://utxo.fun/api/sparkscan/v1/address/{wallet_address}/transactions?network=MAINNET&limit=100&_t={timestamp}"
+            # ПРАВИЛЬНЫЙ API endpoint для баланса
+            balance_api_url = f"https://utxo.fun/api/sparkscan/v1/address/{wallet_address}?network=MAINNET&_t={timestamp}"
             
-            print(f"[INFO] Getting real-time balance from transactions for {wallet_address[:40]}...", file=sys.stderr)
+            print(f"[INFO] Getting balance from utxo.fun API for {wallet_address[:40]}...", file=sys.stderr)
             
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -716,37 +717,27 @@ class SparkWalletManager:
             }
             
             async with httpx.AsyncClient(timeout=10, headers=headers) as client:
-                resp = await client.get(tx_api_url)
+                resp = await client.get(balance_api_url)
                 
                 if resp.status_code == 200:
                     data = resp.json()
-                    transactions = data.get('data', [])
                     
-                    # Вычисляем баланс из транзакций
-                    balance_sats = 0
-                    
-                    for tx in transactions:
-                        direction = tx.get('direction')
-                        amount = tx.get('amountSats', 0)
-                        status = tx.get('status')
-                        
-                        # Считаем только confirmed и sent транзакции
-                        if status in ['confirmed', 'sent']:
-                            if direction == 'incoming':
-                                balance_sats += amount
-                            elif direction == 'outgoing':
-                                balance_sats -= amount
+                    # Получаем ТОЧНЫЙ баланс из API
+                    # btcSoftBalanceSats находится ВНУТРИ объекта balance!
+                    balance_obj = data.get('balance', {})
+                    balance_sats = balance_obj.get('btcSoftBalanceSats', 0)
+                    total_value_usd = data.get('totalValueUsd', 0)
                     
                     balance_btc = f"{balance_sats / 100_000_000:.8f}"
                     
-                    print(f"[INFO] Real-time balance: {balance_sats} sats (from {len(transactions)} transactions)", file=sys.stderr)
+                    print(f"[INFO] Balance from API: {balance_sats} sats (${total_value_usd:.2f})", file=sys.stderr)
                     
                     return {
                         "balance_sats": balance_sats,
                         "balance_btc": balance_btc,
+                        "balance_usd": total_value_usd,
                         "tokens": {},
-                        "status": "success",
-                        "tx_count": len(transactions)
+                        "status": "success"
                     }
                 
                 elif resp.status_code == 429:
