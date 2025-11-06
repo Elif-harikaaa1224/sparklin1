@@ -25,7 +25,7 @@ from token_info import token_service
 from withdrawal_handlers import withdrawal_router, set_wallet_manager
 # Импортируем buy/sell handlers
 from buy_handlers import cmd_buy_new, handle_token_address_input
-from sell_handlers import cmd_sell, handle_sell_token_input, handle_sell_callbacks
+from sell_handlers import cmd_sell, handle_sell_token_input, handle_sell_callbacks, handle_custom_sell_percent_input
 from main_menu_keyboard import create_main_menu_keyboard
 from back_keyboard import create_back_keyboard
 # Импортируем BTC price service
@@ -605,6 +605,7 @@ async def cmd_help(message: types.Message):
 
 
 # Обработчик сообщений
+# Обработчик сообщений
 async def handle_message(message: types.Message, state: FSMContext):
     """Обработка текстовых сообщений"""
     text = message.text
@@ -732,7 +733,46 @@ async def handle_message(message: types.Message, state: FSMContext):
     else:
         current_state = await state.get_state()
         
-        if current_state == WalletStates.waiting_wallet_name:
+        # ✅ ОБРАБОТКА BUY/SELL СОСТОЯНИЙ (нужно обработать ДО trade_contract)
+        
+        if current_state == WalletStates.waiting_token_address:
+            # Обработка адреса токена для покупки
+            from buy_handlers import handle_token_address_input
+            await handle_token_address_input(message, state)
+        
+        elif current_state == WalletStates.waiting_sell_token_address:
+            # Обработка адреса токена для продажи
+            from sell_handlers import handle_sell_token_input
+            await handle_sell_token_input(message, state)
+        
+        elif current_state == WalletStates.waiting_custom_amount:
+            # Обработка custom суммы покупки
+            from buy_handlers_extended import handle_custom_amount
+            await handle_custom_amount(message, state)
+        
+        elif current_state == WalletStates.waiting_buy_tip:
+            # Обработка custom tip для покупки
+            from buy_handlers_extended import handle_custom_tip
+            await handle_custom_tip(message, state)
+        
+        elif current_state == WalletStates.waiting_buy_slippage:
+            # Обработка custom slippage для покупки
+            from buy_handlers_extended import handle_custom_slippage
+            await handle_custom_slippage(message, state)
+        
+        elif current_state == WalletStates.waiting_custom_sell_percent:
+            # ✅ НОВАЯ ФУНКЦИЯ - обработка custom процента продажи
+            from sell_handlers import handle_custom_sell_percent_input
+            await handle_custom_sell_percent_input(message, state)
+        
+        elif current_state == WalletStates.waiting_sell_slippage:
+            # Обработка sell slippage
+            from sell_handlers import handle_custom_sell_slippage
+            await handle_custom_sell_slippage(message, state)
+        
+        # ✅ СТАРЫЕ СОСТОЯНИЯ (оставить как есть)
+        
+        elif current_state == WalletStates.waiting_wallet_name:
             wallet_name = text.strip()
             if not wallet_name:
                 await message.answer("Wallet name cannot be empty")
@@ -920,8 +960,20 @@ async def handle_message(message: types.Message, state: FSMContext):
             except Exception as e:
                 await message.answer(f"❌ Ошибка: {str(e)}")
             await state.clear()
-
-
+        
+        # Если состояние не найдено
+        else:
+            if current_state:
+                print(f"[WARN] Unhandled state: {current_state}")
+                await message.answer(
+                    "❌ Неизвестное состояние. Используйте /start для перезагрузки.",
+                    reply_markup=main_menu()
+                )
+                await state.clear()
+            else:
+                # Нет активного состояния - игнорируем сообщение
+                pass
+    
 # Обработчик callback'ов
 async def handle_callback(callback: types.CallbackQuery, state: FSMContext):
     """Обработка inline кнопок"""
@@ -2335,7 +2387,9 @@ async def main():
     dp.message.register(handle_custom_amount, WalletStates.waiting_custom_amount)
     dp.message.register(handle_custom_tip, WalletStates.waiting_buy_tip)
     dp.message.register(handle_custom_slippage, WalletStates.waiting_buy_slippage)
-    dp.message.register(handle_custom_sell_percent, WalletStates.waiting_custom_sell_percent)
+    # ✅ ЭТА СТРОКА ИСПРАВЛЕНА:
+    from sell_handlers import handle_custom_sell_percent_input
+    dp.message.register(handle_custom_sell_percent_input, WalletStates.waiting_custom_sell_percent)
     dp.message.register(handle_custom_sell_slippage, WalletStates.waiting_sell_slippage)
     
     # CALLBACK HANDLERS - ОБЯЗАТЕЛЬНО ПЕРЕД generic handle_callback!
@@ -2371,7 +2425,6 @@ async def main():
         traceback.print_exc()
     finally:
         await bot.session.close()
-
 
 if __name__ == "__main__":
     # Проверка наличия обязательных переменных

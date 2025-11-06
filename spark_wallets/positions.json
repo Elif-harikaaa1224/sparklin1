@@ -21,6 +21,11 @@
       "amount_sats": 500000,
       "total_bought": 500000,
       "total_sold": 0
+    },
+    "btkn1jg3s2lsdznlv49rapax862vkcfh6tc2gpravg0a7wy0mnpn7rkqqfgh0dl": {
+      "amount_sats": 0,
+      "total_bought": 0,
+      "total_sold": 70000
     }
   }
 }

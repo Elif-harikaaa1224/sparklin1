@@ -5,7 +5,7 @@ bitcoinlib==0.6.14
 ecdsa==0.18.0
 pycryptodome==3.19.0
 httpx==0.24.1
-bip-utils>=2.0.0
+bip-utils
 bech32>=1.2.0
 selenium>=4.0.0
 webdriver-manager>=3.8.0

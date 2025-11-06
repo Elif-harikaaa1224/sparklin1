@@ -67,6 +67,7 @@ async def cmd_sell(message: types.Message, state: FSMContext):
         await show_sell_window(message, state, token_addr)
     else:
         # Запрашиваем адрес токена
+        WalletStates = get_wallet_states()
         await state.set_state(WalletStates.waiting_sell_token_address)
         
         await message.answer(
@@ -242,6 +243,53 @@ async def handle_sell_token_input(message: types.Message, state: FSMContext):
     """Обработка ввода адреса токена для продажи"""
     token_addr = message.text.strip()
     await show_sell_window(message, state, token_addr)
+
+
+async def handle_custom_sell_percent_input(message: types.Message, state: FSMContext):
+    """✅ НОВАЯ ФУНКЦИЯ - Обработка ввода custom процента продажи"""
+    WalletStates = get_wallet_states()
+    
+    try:
+        # Парсим процент
+        percent_text = message.text.strip()
+        
+        # Проверяем что это число
+        if not percent_text.isdigit():
+            await message.answer(
+                "❌ <b>Ошибка!</b>\n\n"
+                "Введите <b>число</b> от 1 до 100\n\n"
+                "Примеры:\n"
+                "• <code>30</code> для 30%\n"
+                "• <code>50</code> для 50%\n"
+                "• <code>100</code> для 100%",
+                parse_mode="HTML"
+            )
+            return
+        
+        percent = int(percent_text)
+        
+        # Валидируем диапазон
+        if percent < 1 or percent > 100:
+            await message.answer(
+                "❌ <b>Ошибка!</b>\n\n"
+                "Процент должен быть от 1 до 100\n\n"
+                f"Вы ввели: {percent}",
+                parse_mode="HTML"
+            )
+            return
+        
+        # Сохраняем процент
+        await state.update_data(selected_percent=percent)
+        
+        # Возвращаемся в состояние подтверждения продажи
+        await state.set_state(WalletStates.sell_confirming)
+        
+        # Обновляем сообщение
+        await update_sell_message(message, state)
+        
+    except Exception as e:
+        print(f"[ERROR] Custom sell percent: {e}")
+        await message.answer(f"❌ Error: {str(e)}")
 
 
 async def handle_sell_callbacks(callback: types.CallbackQuery, state: FSMContext):
