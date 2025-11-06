@@ -1293,6 +1293,14 @@ SPARK is a Layer 2 solution for Bitcoin with lightning-fast transfers and meme t
             print(f"[ERROR] Failed to create wallet: {e}", file=sys.stderr)
             traceback.print_exc()
         return
+
+        # Обработка кнопки Refresh в my_wallets
+    elif data == "refresh_wallets":
+        # Просто обновляем список кошельков (балансы получаются заново)
+        await cmd_my_wallets(callback.message)
+        await callback.answer("🔄 Обновлено!")
+        return
+    
     
     # Другие callback для wallets
     elif data == "close_wallets":
