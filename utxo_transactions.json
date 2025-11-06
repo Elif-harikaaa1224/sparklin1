@@ -1,0 +1,135 @@
+{
+  "meta": {
+    "totalItems": 9,
+    "limit": 100,
+    "offset": 0
+  },
+  "data": [
+    {
+      "id": "019a5aad-4eed-7d67-a36d-b5dd4af6b19f",
+      "type": "spark_transfer",
+      "direction": "incoming",
+      "counterparty": {
+        "type": "spark",
+        "identifier": "spark1pgssxzm9juyq9nexjm3tmg30zazwfwwppx823nmmnejdwv404dzrw0c265gvjz"
+      },
+      "amountSats": 500,
+      "valueUsd": 0.50717,
+      "createdAt": "2025-11-06T19:38:21.862957+00:00",
+      "updatedAt": "2025-11-06T19:38:26.136680+00:00",
+      "status": "confirmed"
+    },
+    {
+      "id": "019a5606-8772-7d46-839c-e8cf472bc9be",
+      "type": "spark_transfer",
+      "direction": "outgoing",
+      "counterparty": {
+        "type": "spark",
+        "identifier": "spark1pgss8avx2fjx0epmnyk2d8ar5ke4jjpk0wh9e4xkz9a8tu28cdh9kw00ghypjq"
+      },
+      "amountSats": 500,
+      "valueUsd": 0.50717,
+      "createdAt": "2025-11-05T21:57:41.615925+00:00",
+      "updatedAt": "2025-11-06T19:39:54.778112+00:00",
+      "status": "confirmed"
+    },
+    {
+      "id": "019a5601-8d17-713f-9256-8660d12896e0",
+      "type": "spark_transfer",
+      "direction": "outgoing",
+      "counterparty": {
+        "type": "spark",
+        "identifier": "spark1pgss8avx2fjx0epmnyk2d8ar5ke4jjpk0wh9e4xkz9a8tu28cdh9kw00ghypjq"
+      },
+      "amountSats": 100,
+      "valueUsd": 0.101434,
+      "createdAt": "2025-11-05T21:52:15.012053+00:00",
+      "updatedAt": "2025-11-06T19:39:59.106208+00:00",
+      "status": "confirmed"
+    },
+    {
+      "id": "019a55fe-fb01-76e8-9901-ed7368b3c210",
+      "type": "spark_transfer",
+      "direction": "outgoing",
+      "counterparty": {
+        "type": "spark",
+        "identifier": "spark1pgss8avx2fjx0epmnyk2d8ar5ke4jjpk0wh9e4xkz9a8tu28cdh9kw00ghypjq"
+      },
+      "amountSats": 200,
+      "valueUsd": 0.202868,
+      "createdAt": "2025-11-05T21:49:26.499112+00:00",
+      "updatedAt": "2025-11-06T19:40:01.446402+00:00",
+      "status": "confirmed"
+    },
+    {
+      "id": "019a55fa-6273-710c-bf24-ca8511751000",
+      "type": "spark_transfer",
+      "direction": "outgoing",
+      "counterparty": {
+        "type": "spark",
+        "identifier": "spark1pgss8avx2fjx0epmnyk2d8ar5ke4jjpk0wh9e4xkz9a8tu28cdh9kw00ghypjq"
+      },
+      "amountSats": 500,
+      "valueUsd": 0.50717,
+      "createdAt": "2025-11-05T21:44:25.759988+00:00",
+      "updatedAt": "2025-11-06T19:40:04.686633+00:00",
+      "status": "confirmed"
+    },
+    {
+      "id": "019a55ed-47d9-7c12-a0be-418589b28404",
+      "type": "spark_transfer",
+      "direction": "outgoing",
+      "counterparty": {
+        "type": "spark",
+        "identifier": "spark1pgss8avx2fjx0epmnyk2d8ar5ke4jjpk0wh9e4xkz9a8tu28cdh9kw00ghypjq"
+      },
+      "amountSats": 500,
+      "valueUsd": 0.50717,
+      "createdAt": "2025-11-05T21:30:07.164561+00:00",
+      "updatedAt": "2025-11-06T19:40:07.838695+00:00",
+      "status": "confirmed"
+    },
+    {
+      "id": "019a55de-d395-7c24-86e8-c3329b3200d4",
+      "type": "spark_transfer",
+      "direction": "outgoing",
+      "counterparty": {
+        "type": "spark",
+        "identifier": "spark1pgss8avx2fjx0epmnyk2d8ar5ke4jjpk0wh9e4xkz9a8tu28cdh9kw00ghypjq"
+      },
+      "amountSats": 2000,
+      "valueUsd": 2.02868,
+      "createdAt": "2025-11-05T21:14:20.251678+00:00",
+      "updatedAt": "2025-11-06T19:40:10.511643+00:00",
+      "status": "confirmed"
+    },
+    {
+      "id": "019a55c1-ca34-7988-8a77-6f3b9dc0902d",
+      "type": "spark_transfer",
+      "direction": "outgoing",
+      "counterparty": {
+        "type": "spark",
+        "identifier": "spark1pgss8avx2fjx0epmnyk2d8ar5ke4jjpk0wh9e4xkz9a8tu28cdh9kw00ghypjq"
+      },
+      "amountSats": 5000,
+      "valueUsd": 5.0717,
+      "createdAt": "2025-11-05T20:42:37.816329+00:00",
+      "updatedAt": "2025-11-06T19:40:11.975703+00:00",
+      "status": "confirmed"
+    },
+    {
+      "id": "019a555a-42c5-78b4-b51b-a29cfa60983a",
+      "type": "spark_transfer",
+      "direction": "incoming",
+      "counterparty": {
+        "type": "spark",
+        "identifier": "spark1pgss9auq4jnf5vu6h8qy594fz87gfc9stsrh0kyaxuyxctp5lryegp3ghnkjqq"
+      },
+      "amountSats": 14394,
+      "valueUsd": 14.60040996,
+      "createdAt": "2025-11-05T18:49:31.966139+00:00",
+      "updatedAt": "2025-11-05T18:49:41.866034+00:00",
+      "status": "confirmed"
+    }
+  ]
+}

@@ -234,6 +234,10 @@ async def cmd_start(message: types.Message, state: FSMContext):
             balance_info = await wallet_manager.get_wallet_balance(wallet_address)
             balance_sats = balance_info.get("balance_sats", 0)
             
+            # DEBUG: Выводим полученный баланс
+            print(f"[DEBUG] /start balance_info: {balance_info}", file=sys.stderr)
+            print(f"[DEBUG] /start balance_sats: {balance_sats}", file=sys.stderr)
+            
             # Получаем цену BTC для конвертации
             try:
                 btc_price = await btc_price_service.get_btc_price_usd()

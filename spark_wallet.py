@@ -724,11 +724,22 @@ class SparkWalletManager:
                     
                     # Вычисляем баланс из транзакций
                     balance_sats = 0
+                    skipped_self_transfers = 0
                     
                     for tx in transactions:
                         direction = tx.get('direction')
                         amount = tx.get('amountSats', 0)
                         status = tx.get('status')
+                        
+                        # Проверяем не является ли это переводом самому себе
+                        counterparty = tx.get('counterparty', {})
+                        counterparty_address = counterparty.get('identifier', '')
+                        
+                        # ИГНОРИРУЕМ переводы самому себе!
+                        if counterparty_address == wallet_address:
+                            skipped_self_transfers += 1
+                            print(f"[INFO] Skipping self-transfer: {amount} sats (tx to self)", file=sys.stderr)
+                            continue
                         
                         # Считаем только confirmed и sent транзакции
                         if status in ['confirmed', 'sent']:
@@ -739,7 +750,7 @@ class SparkWalletManager:
                     
                     balance_btc = f"{balance_sats / 100_000_000:.8f}"
                     
-                    print(f"[INFO] Real-time balance: {balance_sats} sats (from {len(transactions)} transactions)", file=sys.stderr)
+                    print(f"[INFO] Real-time balance: {balance_sats} sats (from {len(transactions)} transactions, {skipped_self_transfers} self-transfers skipped)", file=sys.stderr)
                     
                     return {
                         "balance_sats": balance_sats,
