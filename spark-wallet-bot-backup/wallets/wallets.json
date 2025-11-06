@@ -1,0 +1,23 @@
+{
+  "test_wallet": {
+    "name": "test_wallet",
+    "address": "spark1pgss8qc2a4lagdk6hzmm7kl558tq4k3gdh9j5eudhjm2rcuxds09akgq82y2dx",
+    "public_key": "03830aed7fd436dab8b7bf5bf4a1d60ada286dcb2a678dbcb6a1e3866c1e5ed900",
+    "private_key": "85182d66e7ecf8450b33fc419135c5dcf744ee4d0b29526bd6c4c06c1a4991e6",
+    "mnemonic": "sustain connect disagree worry whale bundle gain heart provide wish glass private",
+    "created_at": "2025-11-04T12:42:37.028913",
+    "network": "bitcoin",
+    "bitcoin_deposit_address": null
+  },
+  "auth_test_wallet": {
+    "name": "auth_test_wallet",
+    "address": "spark1pgss9u8hkheerj45xf9d56szghqrzyxfqky50mpw7xjcun8yeqwcj08u554c6s",
+    "public_key": "02f0f7b5f391cab4324ada6a0245c03110c9058947ec2ef1a58e4ce4c81d893cfc",
+    "private_key": "caff8f528cba26d0344ceffd7b80d9f3141bbfe07811d3b00ffdc32162aa35fc",
+    "mnemonic": "rocket end slice try tail atom labor kick differ control kingdom approve",
+    "created_at": "2025-11-04T12:43:56.874681",
+    "network": "bitcoin",
+    "bitcoin_deposit_address": null
+  },
+  "_active_wallet": "test_wallet"
+}

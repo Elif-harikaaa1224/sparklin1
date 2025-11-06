@@ -1,0 +1,20 @@
+{
+  "name": "spark-withdrawal-scripts",
+  "version": "1.0.0",
+  "description": "Node.js scripts for Spark wallet withdrawal operations",
+  "type": "module",
+  "scripts": {
+    "create-invoice": "node create_lightning_invoice.js",
+    "pay-invoice": "node pay_lightning_invoice.js",
+    "withdraw": "node withdraw_to_l1.js",
+    "get-fee": "node get_withdrawal_fee.js"
+  },
+  "dependencies": {
+    "@buildonspark/spark-sdk": "^0.4.4",
+    "@lightsparkdev/lightspark-sdk": "^1.9.13",
+    "bech32": "^2.0.0",
+    "dotenv": "^17.2.3"
+  },
+  "author": "Spark Wallet Bot",
+  "license": "MIT"
+}

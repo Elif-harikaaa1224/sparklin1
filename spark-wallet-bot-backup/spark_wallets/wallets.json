@@ -1,0 +1,23 @@
+{
+  "wallet_471657882_1762366089": {
+    "name": "wallet_471657882_1762366089",
+    "address": "spark1pgss8avx2fjx0epmnyk2d8ar5ke4jjpk0wh9e4xkz9a8tu28cdh9kw00ghypjq",
+    "public_key": "03f586526467e43b992ca69fa3a5b35948367bae5cd4d6117a75f147c36e5b39ef",
+    "private_key": "99bf8dc1e57ae86d7f0336240b4fb41f6cca19f5e3a711464e0a195074e5d15b",
+    "mnemonic": "embrace absorb dune emerge prevent proof girl infant fantasy story flavor assume",
+    "created_at": "2025-11-05T21:08:09.093745",
+    "network": "bitcoin",
+    "bitcoin_deposit_address": null
+  },
+  "wallet_471657882_1762367657": {
+    "name": "wallet_471657882_1762367657",
+    "address": "spark1pgssxzm9juyq9nexjm3tmg30zazwfwwppx823nmmnejdwv404dzrw0c265gvjz",
+    "public_key": "030b65970802cf2696e2bda22f1744e4b9c1098ea8cf7b9e64d732afab44373f0a",
+    "private_key": "77362c543ffcd6a18f647999401148b56bc7ef080e46a78f00f221b146b69a8d",
+    "mnemonic": "occur salute impulse common machine cushion hurt gun gain orange knee total",
+    "created_at": "2025-11-05T21:34:17.527585",
+    "network": "bitcoin",
+    "bitcoin_deposit_address": null
+    },
+  "_active_wallet": "wallet_471657882_1762366089"
+}
