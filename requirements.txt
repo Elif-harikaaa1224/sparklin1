@@ -1,0 +1,13 @@
+aiogram==3.3.0
+python-dotenv==1.0.0
+mnemonic==0.21
+bitcoinlib==0.6.14
+ecdsa==0.18.0
+pycryptodome==3.19.0
+httpx==0.24.1
+bip-utils>=2.0.0
+bech32>=1.2.0
+selenium>=4.0.0
+webdriver-manager>=3.8.0
+pymongo==4.11.0
+motor==3.3.2

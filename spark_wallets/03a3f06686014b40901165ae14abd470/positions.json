@@ -1,0 +1,26 @@
+{
+  "wallet_471657882_1761948693": {
+    "btkn122ugq2ly2742erq5v84h9e82eyca6x3gzy48kvewj9pk6ph5lrlsnl6lyu": {
+      "amount_sats": 10000,
+      "total_bought": 10000,
+      "total_sold": 0
+    },
+    "btkn1fa6l5xk6kwd9hdenvjy2atcrcrh0du5g3yq0c4znnrzmrlvgpkasnkh0dl": {
+      "amount_sats": 20000,
+      "total_bought": 20000,
+      "total_sold": 0
+    },
+    "btkn1vmdymkz92y6fa8fecrp3jugesfzy9qq9we2ntwds9nk3mwgra8tsmlh0dl": {
+      "amount_sats": 300000,
+      "total_bought": 300000,
+      "total_sold": 0
+    }
+  },
+  "wallet_471657882_1762366089": {
+    "btkn1fa6l5xk6kwd9hdenvjy2atcrcrh0du5g3yq0c4znnrzmrlvgpkasnkh0dl": {
+      "amount_sats": 500000,
+      "total_bought": 500000,
+      "total_sold": 0
+    }
+  }
+}

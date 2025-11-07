@@ -1,0 +1,13 @@
+{
+  "wallet_7496108410_1762541319": {
+    "name": "wallet_7496108410_1762541319",
+    "address": "spark1pgss95p33njn0jxl285lvx0ph9tykrwxlclhx5xux4x0ejzsf5d24jvs9j0dqu",
+    "public_key": "02d0318ce537c8df51e9f619e1b9564b0dc6fe3f7350dc354cfcc8504d1aaac990",
+    "private_key": "eb910f3d58435921c2469fa3fce79eab35cb3a003ab8945c56fc5d281a752ed1",
+    "mnemonic": "leader amount change distance turtle spirit apple omit merge fossil loop sniff",
+    "created_at": "2025-11-07T21:48:39.903305",
+    "network": "bitcoin",
+    "bitcoin_deposit_address": null
+  },
+  "_active_wallet": "wallet_7496108410_1762541319"
+}

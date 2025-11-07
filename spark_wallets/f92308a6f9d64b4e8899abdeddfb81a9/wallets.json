@@ -1,0 +1,13 @@
+{
+  "wallet_443584053_1762542350": {
+    "name": "wallet_443584053_1762542350",
+    "address": "spark1pgssx08kl0xdrecpkf2pgkpwljg92weqavmftqleql955ypqlrjezqw2g9u90a",
+    "public_key": "033cf6fbccd1e701b25414582efc90553b20eb369583f907cb4a1020f8e59101ca",
+    "private_key": "cbb5a2715a9cf7fd5ca108b8431c56e04866f070890a2781cba3f7264c7c6bab",
+    "mnemonic": "false medal front ensure spell suffer shuffle play august labor excuse armor",
+    "created_at": "2025-11-07T22:05:50.450271",
+    "network": "bitcoin",
+    "bitcoin_deposit_address": null
+  },
+  "_active_wallet": "wallet_443584053_1762542350"
+}

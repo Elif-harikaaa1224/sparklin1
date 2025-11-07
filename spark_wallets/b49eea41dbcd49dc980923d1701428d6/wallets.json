@@ -1,0 +1,13 @@
+{
+  "wallet_5246052783_1762542119": {
+    "name": "wallet_5246052783_1762542119",
+    "address": "spark1pgssxdsmv8w2fjq6yss4s6p6qkwccjqnxwcr0efw2gr9wrfvk9w2v5w8mpxst6",
+    "public_key": "03361b61dca4c81a242158683a059d8c481333b037e52e5206570d2cb15ca651c7",
+    "private_key": "3d16ee56ce872a3f8d7d525dcd05e74d50b29289180e4c6570c8e42df2f575f5",
+    "mnemonic": "umbrella ancient degree survey angry super hero stem crucial angry around ugly",
+    "created_at": "2025-11-07T22:01:59.077699",
+    "network": "bitcoin",
+    "bitcoin_deposit_address": null
+  },
+  "_active_wallet": "wallet_5246052783_1762542119"
+}
