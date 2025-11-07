@@ -29,64 +29,71 @@ class TokenInfoService:
         self.btc_price_ttl = 60  # Обновлять цену BTC каждую минуту
     
     async def get_token_info(self, token_address: str) -> Dict:
-        """
-        Получить информацию о токене с кэшированием
-        
-        Args:
-            token_address: Адрес токена (btkn1...)
-            
-        Returns:
-            {
-                address, symbol, name, 
-                price_btc, price_usd, 
-                market_cap_usd, liquidity_usd,
-                volume_24h, holders
-            }
-        """
         # 1️⃣ Проверяем кэш
         cached = token_cache.get(token_address)
         if cached:
             return cached
-        
-        # 2️⃣ Проверяем нужно ли ждать перед запросом
+
+        # 2️⃣ Проверяем таймер запросов
         wait_time = token_cache.should_wait_before_request(token_address)
         if wait_time > 0:
             print(f"[INFO] Waiting {wait_time:.1f}s before request...")
             await asyncio.sleep(wait_time)
-        
-        # 3️⃣ Делаем запрос
+
+        # 3️⃣ Запрос к API
         token_cache.mark_request(token_address)
-        
+
         try:
             if not utxo_api:
                 raise Exception("UTXO API not available")
-            
+
             print(f"[INFO] Fetching token info for {token_address[:20]}...")
             token_info = await utxo_api.get_token_pool(token_address)
-            
-            # Если успешно получили - сохраняем в кэш
-            if token_info and token_info.get('symbol'):
+
+            # 🔹 Если есть цена в BTC, конвертируем в USD
+            if token_info and token_info.get("price_btc"):
+                price_btc = float(token_info["price_btc"])
+
+                # Если курс BTC не кэширован или устарел — обновляем
+                now = time.time()
+                if not self.btc_price or now - self.btc_price_update_time > self.btc_price_ttl:
+                    try:
+                        from btc_price import btc_price_service
+                        self.btc_price = await btc_price_service.get_btc_price_usd()
+                        self.btc_price_update_time = now
+                        print(f"[INFO] BTC price updated: ${self.btc_price}")
+                    except Exception as e:
+                        print(f"[WARN] Failed to fetch BTC price: {e}")
+                        self.btc_price = 0
+
+                # Конвертация
+                token_info["price_usd"] = (
+                    round(price_btc * self.btc_price, 8) if self.btc_price else 0.0
+                )
+
+            # ✅ Сохраняем в кэш и возвращаем
+            if token_info and token_info.get("symbol"):
                 token_cache.set(token_address, token_info)
                 print(f"[SUCCESS] Got token info: {token_info.get('symbol')}")
                 return token_info
-            
+
         except Exception as e:
             print(f"[WARN] Error fetching token info: {e}")
-        
-        # 4️⃣ Возвращаем данные по умолчанию
+
+        # 🔻 Если ничего не получили — дефолт
         print(f"[INFO] Using default token info for {token_address[:20]}...")
         return {
-            'address': token_address,
-            'symbol': 'UNKNOWN',
-            'name': 'Unknown Token',
-            'price_btc': 0.0,
-            'price_usd': 0.0,
-            'market_cap_usd': 0,
-            'liquidity_usd': 0,
-            'volume_24h': 0,
-            'holders': 0
+            "address": token_address,
+            "symbol": "UNKNOWN",
+            "name": "Unknown Token",
+            "price_btc": 0.0,
+            "price_usd": 0.0,
+            "market_cap_usd": 0,
+            "liquidity_usd": 0,
+            "volume_24h": 0,
+            "holders": 0
         }
-    
+
     async def calculate_tokens_for_btc(self, token_address: str, btc_amount: float) -> Dict:
         """
         Рассчитать количество токенов для суммы BTC

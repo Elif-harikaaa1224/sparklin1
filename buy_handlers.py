@@ -4,17 +4,40 @@
 
 from aiogram import types
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from token_info import token_service
 from buy_keyboards import create_buy_keyboard, create_tip_keyboard, create_slippage_keyboard
 import sys
 
 
 # Импортируем глобальные переменные отдельно, чтобы избежать циклического импорта
+# ✅ Безопасное получение wallet_manager без циклических импортов
+_wallet_manager_instance = None
+
 def get_wallet_manager():
-    """Получить wallet_manager из telegram_bot"""
-    from telegram_bot import wallet_manager
-    return wallet_manager
+    """
+    Безопасно получить wallet_manager из telegram_bot.py
+    с защитой от циклических импортов.
+    """
+    global _wallet_manager_instance
+
+    if _wallet_manager_instance is not None:
+        return _wallet_manager_instance
+
+    try:
+        import sys
+        telegram_bot = sys.modules.get("telegram_bot")
+
+        if telegram_bot and hasattr(telegram_bot, "wallet_manager"):
+            _wallet_manager_instance = telegram_bot.wallet_manager
+            return _wallet_manager_instance
+        else:
+            from telegram_bot import wallet_manager  # fallback
+            _wallet_manager_instance = wallet_manager
+            return _wallet_manager_instance
+
+    except Exception as e:
+        print(f"[ERROR] Cannot import wallet_manager: {e}")
+        return None
 
 def get_wallet_states():
     """Получить WalletStates из telegram_bot"""
@@ -32,7 +55,13 @@ async def cmd_buy_new(message: types.Message, state: FSMContext):
     print(f"[BUY_CMD] User {user_id} started /buy command")
     
     # Проверяем наличие кошельков
+    wallet_manager = get_wallet_manager()
+    if not wallet_manager:
+        await message.answer("❌ Ошибка: менеджер кошельков не инициализирован")
+        return
+
     wallets = wallet_manager.list_wallets()
+
     if not wallets:
         print(f"[BUY_CMD] User {user_id} has no wallets")
         await message.answer(
@@ -133,7 +162,13 @@ async def handle_token_address_input(message: types.Message, state: FSMContext):
         token_info = await token_service.get_token_info(token_input)
         
         # Получаем список кошельков пользователя
+        wallet_manager = get_wallet_manager()
+        if not wallet_manager:
+            await message.answer("❌ Ошибка: менеджер кошельков не инициализирован")
+            return
+
         wallets = wallet_manager.list_wallets()
+
         wallet_list = list(wallets.keys())
         
         # Получаем баланс первого кошелька
@@ -254,7 +289,13 @@ async def handle_buy_refresh(callback: types.CallbackQuery, state: FSMContext):
         
         # Обновляем баланс кошелька
         selected_wallet_name = data.get("selected_wallet_name")
+        wallet_manager = get_wallet_manager()
+        if not wallet_manager:
+            await callback.message.answer("❌ Ошибка: менеджер кошельков не инициализирован")
+            return
+
         wallets = wallet_manager.list_wallets()
+
         wallet_address = wallets[selected_wallet_name]['address']
         
         try:
@@ -315,7 +356,13 @@ async def handle_buy_wallet_selection(callback: types.CallbackQuery, state: FSMC
     await callback.answer(f"✓ Выбран {wallet_label}")
     
     # Получаем баланс выбранного кошелька
+    wallet_manager = get_wallet_manager()
+    if not wallet_manager:
+        await callback.message.answer("❌ Ошибка: менеджер кошельков не инициализирован")
+        return
+
     wallets = wallet_manager.list_wallets()
+
     wallet_address = wallets[wallet_name]['address']
     
     try:
@@ -361,7 +408,8 @@ async def handle_buy_amount_selection(callback: types.CallbackQuery, state: FSMC
     
     if amount_str == "custom":
         await callback.answer("✏️ Введите сумму")
-        await state.set_state(WalletStates.waiting_custom_amount)
+        WalletStates = get_wallet_states()
+        await state.set_state(WalletStates.buy_confirming)
         await callback.message.answer(
             "💰 <b>Введите сумму в BTC:</b>\n\n"
             "Например: <code>0.0005</code>\n"
@@ -383,6 +431,11 @@ async def handle_buy_amount_selection(callback: types.CallbackQuery, state: FSMC
     await state.update_data(selected_amount=amount)
     
     # Обновляем клавиатуру
+    wallet_manager = get_wallet_manager()
+    if not wallet_manager:
+        await callback.message.answer("❌ Ошибка: менеджер кошельков не инициализирован")
+        return
+
     wallets = wallet_manager.list_wallets()
     wallet_list = list(wallets.keys())
     
@@ -417,7 +470,9 @@ async def handle_custom_amount_input(message: types.Message, state: FSMContext):
         # Обновляем состояние
         data = await state.get_data()
         await state.update_data(selected_amount=amount)
+        WalletStates = get_wallet_states()
         await state.set_state(WalletStates.buy_confirming)
+
         
         # Показываем обновленное меню
         token_info = data.get("token_info", {})
@@ -426,7 +481,13 @@ async def handle_custom_amount_input(message: types.Message, state: FSMContext):
         
         message_text = await format_buy_message(token_info, balance_sats, selected_wallet)
         
+        wallet_manager = get_wallet_manager()
+        if not wallet_manager:
+            await message.answer("❌ Ошибка: менеджер кошельков не инициализирован")
+            return
+
         wallets = wallet_manager.list_wallets()
+
         wallet_list = list(wallets.keys())
         
         keyboard = create_buy_keyboard(
@@ -480,7 +541,8 @@ async def handle_tip_selection(callback: types.CallbackQuery, state: FSMContext)
     
     if callback.data == "tip_custom":
         await callback.answer("✏️ Введите tip")
-        await state.set_state(WalletStates.waiting_buy_tip)
+        WalletStates = get_wallet_states()
+        await state.set_state(WalletStates.buy_confirming)
         await callback.message.answer(
             "⚡ <b>Введите размер Buy Tip в BTC:</b>\n\n"
             "Например: <code>0.0000005</code>\n"
@@ -513,7 +575,13 @@ async def handle_tip_selection(callback: types.CallbackQuery, state: FSMContext)
     
     message_text = await format_buy_message(token_info, balance_sats, selected_wallet)
     
+    wallet_manager = get_wallet_manager()
+    if not wallet_manager:
+        await callback.message.answer("❌ Ошибка: менеджер кошельков не инициализирован")
+        return
+
     wallets = wallet_manager.list_wallets()
+
     wallet_list = list(wallets.keys())
     
     keyboard = create_buy_keyboard(
@@ -529,6 +597,3 @@ async def handle_tip_selection(callback: types.CallbackQuery, state: FSMContext)
         reply_markup=keyboard,
         parse_mode="HTML"
     )
-
-
-# Продолжение следует в следующем файле...
