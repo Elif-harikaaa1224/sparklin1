@@ -11,6 +11,8 @@ from datetime import datetime
 from typing import Optional
 from dotenv import load_dotenv
 
+load_dotenv()
+
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -31,7 +33,10 @@ from back_keyboard import create_back_keyboard
 # Импортируем BTC price service
 from btc_price import btc_price_service
 
-load_dotenv()
+# Импортируем create_user
+from src.create_user import create_user
+# Импортируем show_referral_code
+from src.ref.get_referral_code import get_referral_code
 
 # Инициализация
 # Загружаем токен и credentials из .env файла
@@ -173,7 +178,20 @@ async def cmd_start(message: types.Message, state: FSMContext):
     """Команда /start"""
     user_id = message.from_user.id
     print(f"[DEBUG] Received /start from user {user_id}")
-    
+
+    # check if user used ref code
+    message_text = message.text
+    if message_text:
+        if message_text.startswith("/start ref_"):
+            referral_code = message_text.split("_")[1]
+            result = await create_user(user_id, message.from_user.username, referral_code)
+            print(f"[DEBUG] User {user_id} used referral code {referral_code} to register: {result}")
+        else:
+            # save user to database if new
+            print(f"[DEBUG] Saving user {user_id} to database")
+            result = await create_user(user_id, message.from_user.username)
+            print(f"[DEBUG] User {user_id} saved to database: {result}")
+
     # Проверяем, есть ли у пользователя кошельки
     wallets = wallet_manager.list_wallets()
     
@@ -283,6 +301,9 @@ SPARK is a Layer 2 solution for Bitcoin with lightning-fast transfers and meme t
         [
             InlineKeyboardButton(text="�💰 Deposit", callback_data="home_deposit"),
             InlineKeyboardButton(text="🔄 Refresh", callback_data="home_refresh")
+        ],
+        [
+            InlineKeyboardButton(text="💰 Referral", callback_data="home_referral")
         ]
     ])
     
@@ -932,6 +953,30 @@ async def handle_callback(callback: types.CallbackQuery, state: FSMContext):
     # Кнопка My Wallets на домашнем экране
     if data == "home_my_wallets":
         await cmd_my_wallets(callback.message)
+        await callback.answer()
+        return
+    
+    # Кнопка Referral на домашнем экране
+    elif data == "home_referral":        
+        referral_code = await get_referral_code(callback.from_user.id)
+        if referral_code:
+            deepLink = f"https://t.me/testsparktradetestbot?start=ref_{referral_code}"
+            message = (
+            "💰 <b>Your Referral Code:</b>\n\n"
+            f"🔑 <b>Code:</b>\n<code>{referral_code}</code>\n\n"
+            f"🔗 <b>Deep Link:</b>\n"
+            f"{deepLink}\n\n"
+            "💡 <b>How to use:</b>\n"
+            "1. Share your code with friends\n"
+            "2. Friends use your code to register\n"
+            "3. You earn 10% from their deposits!"
+            )
+        else:
+            message = "💰 <b>You don't have a referral code yet</b>"
+        await callback.message.answer(
+            message,
+            parse_mode="HTML"
+        )
         await callback.answer()
         return
     

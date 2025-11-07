@@ -1,5 +1,0 @@
-{
-  "main": "index.js",
-  "browser": "browser.js",
-  "types": "index.d.ts"
-}
