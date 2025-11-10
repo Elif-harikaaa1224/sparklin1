@@ -1042,29 +1042,39 @@ async def handle_callback(callback: types.CallbackQuery, state: FSMContext):
     
     # Кнопка Referral на домашнем экране
     elif data == "home_referral":        
-        referral_info = await get_referral_code(callback.from_user.id)
-        if referral_info and referral_info.get("code"):
-            referral_code = referral_info["code"]
-            referrals_count = referral_info.get("count", 0)
-            deepLink = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start=ref_{referral_code}"
-            message = (
-            "💰 <b>Your Referral Code:</b>\n\n"
-            f"🔑 <b>Code:</b>\n<code>{referral_code}</code>\n\n"
-            f"🔗 <b>Deep Link:</b>\n"
-            f"{deepLink}\n\n"
-            "👥 <b>Invited users:</b>\n"
-            f"{referrals_count}\n\n"
-            "💡 <b>How to use:</b>\n"
-            "1. Share your code with friends\n"
-            "2. Friends use your code to register\n"
-            "3. You earn 10% from their deposits!"
-            )
-        else:
-            message = "💰 <b>You don't have a referral code yet</b>"
+        message, keyboard = await _build_referral_overview(user_id, manager)
         await callback.message.answer(
             message,
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=keyboard,
         )
+        await callback.answer()
+        return
+    
+    elif data == "refresh_referral":
+        message, keyboard = await _build_referral_overview(user_id, manager)
+        try:
+            await callback.message.edit_text(
+                message,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+        except Exception as exc:
+            # Если нельзя отредактировать (например, сообщение удалено), отправляем новое
+            print(f"[WARN] Failed to edit referral message: {exc}")
+            await callback.message.answer(
+                message,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+        await callback.answer("🔄 Обновлено!")
+        return
+    
+    elif data == "close_referral":
+        try:
+            await callback.message.delete()
+        except Exception as exc:
+            print(f"[WARN] Failed to delete referral message: {exc}")
         await callback.answer()
         return
     
@@ -2458,6 +2468,109 @@ async def handle_custom_sell_slippage(message: types.Message, state: FSMContext)
         await message.answer(f"✅ Slippage: {slippage:.1f}%")
     except:
         await message.answer("❌ Неверный формат!")
+
+
+def _format_sats(value: Optional[int]) -> str:
+    try:
+        return f"{int(value):,}".replace(",", " ")
+    except (TypeError, ValueError):
+        return "0"
+
+
+async def _build_referral_overview(user_id: int, manager) -> tuple[str, InlineKeyboardMarkup]:
+    referral_info = await get_referral_code(user_id)
+
+    if not referral_info or not referral_info.get("code"):
+        message = (
+            "🌸 <b>Bloom Referral Program</b>\n\n"
+            "🔗 <b>Your referral link</b>\n"
+            f"<a href=\"{referral_link}\">{referral_link}</a>\n\n"
+            "👛 <b>Payout address</b>\n"
+            f"<code>{payout_address}</code>\n\n"
+            "📊 <b>Referral overview</b>\n"
+            f"• Level 1: {level1_count} users / {_format_sats(level1_volume_sats)} SATS\n"
+            f"• Level 2: {level2_count} users / 0 SATS\n"
+            f"• Level 3: {level3_count} users / 0 SATS\n"
+            "• Referred trades: 0\n\n"
+            "🎁 <b>Rewards</b>\n"
+            f"• Pending: {_format_sats(total_unclaimed_sats)} SATS\n"
+            f"• Claimed: {_format_sats(total_claimed_sats)} SATS\n"
+            f"• Lifetime earnings: {_format_sats(lifetime_sats)} SATS\n\n"
+            "👥 <b>Invited users</b>\n"
+            f"{referrals_list}\n\n"
+            "🏁 Reach 10 000 SATS to unlock reward withdrawals.\n\n"
+            f"🕒 <i>Last updated: {last_updated}</i>"
+        )
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu")],
+                [InlineKeyboardButton(text="🚪 Закрыть", callback_data="close_referral")],
+            ]
+        )
+        return message, keyboard
+
+    referral_code = referral_info["code"]
+    level1_users = referral_info.get("referrals") or []
+    level1_count = len(level1_users)
+    level1_volume_sats = referral_info.get("level1_volume_sats", 0)
+    level2_count = referral_info.get("level2_count", 0)
+    level3_count = referral_info.get("level3_count", 0)
+
+    total_unclaimed_sats = referral_info.get("rewards_unclaimed_sats", 0)
+    total_claimed_sats = referral_info.get("rewards_claimed_sats", 0)
+    lifetime_sats = total_unclaimed_sats + total_claimed_sats
+
+    referral_link = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start=ref_{referral_code}"
+
+    active_wallet_info = manager.get_active_wallet()
+    if active_wallet_info:
+        _, wallet_data = active_wallet_info
+        payout_address = getattr(wallet_data, "address", None)
+        if not payout_address and isinstance(wallet_data, dict):
+            payout_address = wallet_data.get("address")
+    else:
+        payout_address = "—"
+
+    referrals_list = (
+        "\n".join(f"   • <code>{uid}</code>" for uid in level1_users)
+        if level1_users
+        else "   • Пока нет приглашённых"
+    )
+
+    last_updated = datetime.utcnow().strftime("%d.%m.%Y %H:%M:%S UTC")
+
+    message = (
+        "<b> Sparkling Referral Program</b>\n\n"
+        "🔗 <b>Your referral link</b>\n"
+        f"<a href=\"{referral_link}\">{referral_link}</a>\n\n"
+        "👛 <b>Payout address</b>\n"
+        f"<code>{payout_address}</code>\n\n"
+        "📊 <b>Referral overview</b>\n"
+        f"• Level 1: {level1_count} users / {_format_sats(level1_volume_sats)} SATS\n"
+        f"• Level 2: {level2_count} users / 0 SATS\n"
+        f"• Level 3: {level3_count} users / 0 SATS\n"
+        "• Referred trades: 0\n\n"
+        "🎁 <b>Rewards</b>\n"
+        f"• Pending: {_format_sats(total_unclaimed_sats)} SATS\n"
+        f"• Claimed: {_format_sats(total_claimed_sats)} SATS\n"
+        f"• Lifetime earnings: {_format_sats(lifetime_sats)} SATS\n\n"
+        "👥 <b>Invited users</b>\n"
+        f"{referrals_list}\n\n"
+        "🏁 Reach 10 000 SATS to unlock reward withdrawals.\n\n"
+        f"🕒 <i>Last updated: {last_updated}</i>"
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔄 Обновить", callback_data="refresh_referral"),
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu"),
+            ],
+            [InlineKeyboardButton(text="🚪 Закрыть", callback_data="close_referral")],
+        ]
+    )
+
+    return message, keyboard
 
 
 async def main():

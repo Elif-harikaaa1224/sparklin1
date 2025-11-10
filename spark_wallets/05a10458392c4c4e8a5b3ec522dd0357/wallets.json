@@ -1,0 +1,13 @@
+{
+  "wallet_6704404281_1762545606": {
+    "name": "wallet_6704404281_1762545606",
+    "address": "spark1pgss9e94smrg0rhppxypqykglqahkajsz4733actlqd3gxm8fw74wxq4crfffz",
+    "public_key": "02e4b586c6878ee109881012c8f83b7b7650157d18f70bf81b141b674bbd571815",
+    "private_key": "3b18984a25424da70f6e417511b04890ca3a450a6934cb09ec0a8f65e3f79ae8",
+    "mnemonic": "update marriage huge shop slab divorce venue sell axis gas awkward camp",
+    "created_at": "2025-11-07T23:00:07.048006",
+    "network": "bitcoin",
+    "bitcoin_deposit_address": null
+  },
+  "_active_wallet": "wallet_6704404281_1762545606"
+}
