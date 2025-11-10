@@ -331,7 +331,11 @@ SPARK is a Layer 2 solution for Bitcoin with lightning-fast transfers and meme t
             InlineKeyboardButton(text="📊 Positions", callback_data="home_positions")
         ],
         [
-            InlineKeyboardButton(text="💰 Deposit", callback_data="home_deposit"),
+            InlineKeyboardButton(text="� Buy", callback_data="home_buy"),
+            InlineKeyboardButton(text="💸 Sell", callback_data="home_sell")
+        ],
+        [
+            InlineKeyboardButton(text="�💰 Deposit", callback_data="home_deposit"),
             InlineKeyboardButton(text="🔄 Refresh", callback_data="home_refresh")
         ],
         [
@@ -1090,13 +1094,13 @@ async def handle_callback(callback: types.CallbackQuery, state: FSMContext):
     
     # Кнопка Buy на домашнем экране
     elif data == "home_buy":
-        await cmd_buy_new(callback.message, state)
+        await cmd_buy_new(callback.message, state, user_id=callback.from_user.id, username=callback.from_user.username)
         await callback.answer()
         return
     
     # Кнопка Sell на домашнем экране
     elif data == "home_sell":
-        await cmd_sell(callback.message, state)
+        await cmd_sell(callback.message, state, user_id=callback.from_user.id, username=callback.from_user.username)
         await callback.answer()
         return
     
@@ -1290,7 +1294,11 @@ SPARK is a Layer 2 solution for Bitcoin with lightning-fast transfers and meme t
                 InlineKeyboardButton(text="📊 Positions", callback_data="home_positions")
             ],
             [
-                InlineKeyboardButton(text="💰 Deposit", callback_data="home_deposit"),
+                InlineKeyboardButton(text="� Buy", callback_data="home_buy"),
+                InlineKeyboardButton(text="💸 Sell", callback_data="home_sell")
+            ],
+            [
+                InlineKeyboardButton(text="�💰 Deposit", callback_data="home_deposit"),
                 InlineKeyboardButton(text="🔄 Refresh", callback_data="home_refresh")
             ]
         ])
@@ -1509,7 +1517,11 @@ SPARK is a Layer 2 solution for Bitcoin with lightning-fast transfers and meme t
                 InlineKeyboardButton(text="📊 Positions", callback_data="home_positions")
             ],
             [
-                InlineKeyboardButton(text="💰 Deposit", callback_data="home_deposit"),
+                InlineKeyboardButton(text="� Buy", callback_data="home_buy"),
+                InlineKeyboardButton(text="💸 Sell", callback_data="home_sell")
+            ],
+            [
+                InlineKeyboardButton(text="�💰 Deposit", callback_data="home_deposit"),
                 InlineKeyboardButton(text="🔄 Refresh", callback_data="home_refresh")
             ]
         ])

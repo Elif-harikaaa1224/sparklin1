@@ -42,12 +42,19 @@ def get_token_position(user_id: int, wallet_name: str, token_address: str) -> di
     }
 
 
-async def cmd_sell(message: types.Message, state: FSMContext):
+async def cmd_sell(message: types.Message, state: FSMContext, user_id: int = None, username: str = None):
     """
     Команда /sell - начало процесса продажи токена
     """
     WalletStates = get_wallet_states()
-    user_id = message.from_user.id
+    
+    # Если user_id передан, используем его, иначе берем из message
+    if user_id is None:
+        user_id = message.from_user.id
+    if username is None:
+        username = message.from_user.username
+    
+    await ensure_user_storage(user_id, username)
     await ensure_user_storage(user_id, message.from_user.username)
     wallet_manager = get_wallet_manager(user_id)
     print(f"[DEBUG] User {user_id} started /sell command")

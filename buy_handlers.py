@@ -23,13 +23,19 @@ def get_wallet_states():
     return WalletStates
 
 
-async def cmd_buy_new(message: types.Message, state: FSMContext):
+async def cmd_buy_new(message: types.Message, state: FSMContext, user_id: int = None, username: str = None):
     """
     Команда /buy - начало процесса покупки токена
     """
     WalletStates = get_wallet_states()
-    user_id = message.from_user.id
-    await ensure_user_storage(user_id, message.from_user.username)
+    
+    # Если user_id передан, используем его, иначе берем из message
+    if user_id is None:
+        user_id = message.from_user.id
+    if username is None:
+        username = message.from_user.username
+    
+    await ensure_user_storage(user_id, username)
     wallet_manager = get_wallet_manager(user_id)
     print(f"[BUY_CMD] User {user_id} started /buy command")
     
