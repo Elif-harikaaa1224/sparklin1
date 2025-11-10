@@ -200,69 +200,98 @@ async def handle_custom_slippage_input(message: types.Message, state: FSMContext
         )
 
 
+from aiogram import types
+from aiogram.fsm.context import FSMContext
+from token_info import token_service
+
+def get_wallet_states():
+    from telegram_bot import WalletStates
+    return WalletStates
+
+def get_wallet_manager():
+    import sys
+    telegram_bot = sys.modules.get("telegram_bot")
+    if telegram_bot and hasattr(telegram_bot, "wallet_manager"):
+        return telegram_bot.wallet_manager
+    from telegram_bot import wallet_manager
+    return wallet_manager
+
 async def handle_buy_confirm(callback: types.CallbackQuery, state: FSMContext):
-    """
-    Обработка нажатия кнопки Buy Now - показ финального подтверждения
-    """
+    """Подтверждение покупки без красных крестов и с безопасными плейсхолдерами"""
+    WalletStates = get_wallet_states()
     data = await state.get_data()
-    
-    token_info = data.get("token_info", {})
-    selected_amount = data.get("selected_amount", 0.001)
-    buy_tip = data.get("buy_tip", 0.0000001)
-    slippage = data.get("slippage", 10.0)
-    selected_wallet = data.get("selected_wallet", "W1")
-    balance_btc = float(data.get("wallet_balance", "0.0"))
-    
-    # Рассчитываем детали покупки
+
+    token_info = data.get("token_info", {}) or {}
     token_address = token_info.get("address", "")
     symbol = token_info.get("symbol", "UNKNOWN")
-    price_usd = token_info.get("price_usd", 0)
-    
-    # Рассчитываем количество токенов
-    calc = await token_service.calculate_tokens_for_btc(token_address, selected_amount)
-    token_amount = calc.get("token_amount", 0)
-    
-    # Итоговая сумма с tip
+    name = token_info.get("name", "Unknown Token")
+
+    selected_amount = float(data.get("selected_amount", 0.001))
+    buy_tip = float(data.get("buy_tip", 0.0000001))
+    slippage = float(data.get("slippage", 10.0))
+    selected_wallet = data.get("selected_wallet", "W1")
+
+    # баланс берём из sats и приводим к BTC для сравнения
+    balance_sats = int(data.get("wallet_balance_sats", 0) or 0)
+    try:
+        balance_btc = token_service.sats_to_btc(balance_sats)
+    except Exception:
+        balance_btc = 0.0
+
+    # мягкая оценка количества и цены (если не получилось — не показываем ❌)
+    est_token_amount = 0.0
+    display_price_usd = float(token_info.get("price_usd") or 0.0)
+    try:
+        calc = await token_service.calculate_tokens_for_btc(token_address, selected_amount)
+        if calc:
+            est_token_amount = float(calc.get("token_amount") or 0.0)
+            if not display_price_usd:
+                display_price_usd = float(calc.get("price_usd") or 0.0)
+    except Exception:
+        pass
+
     total_btc = selected_amount + buy_tip
-    
-    # Проверка баланса
+
+    # предупреждаем, но окно не ломаем
     if balance_btc < total_btc:
-        await callback.answer("❌ Недостаточно средств!", show_alert=True)
-        return
-    
-    # Формируем сообщение подтверждения
+        await callback.answer("Недостаточно средств на выбранном кошельке.", show_alert=True)
+
+    addr_short = f"{token_address[:15]}...{token_address[-10:]}" if token_address else "—"
+
+    # безопасные строки без ❌/N/A
+    if est_token_amount > 0:
+        receive_line = f"📦 Вы получите: <b>~{est_token_amount:,.2f} {symbol}</b>"
+    else:
+        receive_line = "📦 Вы получите: <i>~ будет рассчитано при подтверждении</i>"
+
+    if display_price_usd > 0:
+        price_line = f"💵 Цена за токен: <b>${display_price_usd:.8f}</b>"
+    else:
+        price_line = "💵 Цена за токен: <i>~ при исполнении</i>"
+
     confirm_message = (
-        f"🔔 <b>Подтверждение покупки</b>\n\n"
-        f"🪙 Токен: <b>${symbol}</b>\n"
-        f"📍 <code>{token_address[:15]}...{token_address[-10:]}</code>\n\n"
+        "🔔 <b>Подтверждение покупки</b>\n\n"
+        f"🪙 Токен: <b>${symbol}</b> — {name}\n"
+        f"📍 <code>{addr_short}</code>\n\n"
         f"💰 Вы платите: <b>{selected_amount:.8f} BTC</b>\n"
-        f"⚡ Buy Tip: <b>{buy_tip:.8f} BTC</b>\n"
+        f"⚡ Tip: <b>{buy_tip:.8f} BTC</b>\n"
         f"📊 Slippage: <b>{slippage:.1f}%</b>\n"
         f"━━━━━━━━━━━━━━━━\n"
         f"💵 Итого: <b>{total_btc:.8f} BTC</b>\n\n"
-        f"📦 Вы получите: <b>~{token_amount:,.2f} {symbol}</b>\n"
-        f"💵 Цена за токен: <b>${price_usd:.8f}</b>\n\n"
-        f"💼 Кошелек: <b>{selected_wallet}</b>\n\n"
-        f"⚠️ <i>Подтвердите операцию нажав кнопку ниже</i>"
+        f"{receive_line}\n"
+        f"{price_line}\n\n"
+        f"💼 Кошелёк: <b>{selected_wallet}</b>"
     )
-    
-    # Клавиатура подтверждения
+
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-        [
-            types.InlineKeyboardButton(text="✅ Confirm Purchase", callback_data="buy_execute"),
-        ],
-        [
-            types.InlineKeyboardButton(text="❌ Cancel", callback_data="buy_cancel")
-        ]
+        [types.InlineKeyboardButton(text="✅ Confirm", callback_data="buy_execute")],
+        [types.InlineKeyboardButton(text="❌ Cancel", callback_data="buy_cancel")]
     ])
-    
-    await callback.message.edit_text(
-        confirm_message,
-        reply_markup=keyboard,
-        parse_mode="HTML"
-    )
-    
-    await callback.answer("👆 Проверьте детали и подтвердите")
+
+    await callback.message.edit_text(confirm_message, reply_markup=keyboard, parse_mode="HTML")
+    await state.set_state(WalletStates.buy_confirming)
+    await callback.answer("👆 Проверь детали и подтверди")
+
 
 
 async def handle_buy_execute(callback: types.CallbackQuery, state: FSMContext):
