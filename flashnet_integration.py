@@ -1,246 +1,255 @@
 """
-Flashnet Swap Integration Module
-С динамическим переключением между MOCK и REAL режимами через config
+Flashnet AMM интеграция для покупки/продажи мем-токенов
 """
 
+import httpx
 import asyncio
-from typing import Dict, Any, Optional
+import json
+import sys
+from typing import Optional, Dict, Any
+from datetime import datetime
 
-# ✅ Загружаем конфигурацию
-from config import USE_MOCK_MODE, is_mock_mode, get_trading_mode
-
-print(f"[FLASHNET] Trading mode: {get_trading_mode()}")
+# ← ДОБАВЛЕНО
+from config import FLASHNET_INTEGRATOR_PUBLIC_KEY
+from referral_service import get_total_integrator_fee_bps
 
 
 class FlashnetSwapIntegration:
-    """Интеграция Flashnet AMM свопов с Spark Wallet"""
-    
-    def __init__(self, wallet_manager):
-        """
-        Args:
-            wallet_manager: Экземпляр SparkWalletManager
-        """
-        self.wallet_manager = wallet_manager
-        self._clients_cache: Dict[str, any] = {}
-        self.mode = get_trading_mode()
-    
-    async def _mock_buy_token(
-        self,
-        wallet_name: str,
-        token_address: str,
-        amount_btc_sats: int,
-        slippage_pct: float
-    ) -> Dict[str, Any]:
-        """🎭 MOCK реализация покупки"""
-        import random
-        import hashlib
-        import time
-        
-        print(f"[MOCK] 🛒 Buying {amount_btc_sats} sats worth of {token_address[:16]}...")
-        await asyncio.sleep(0.3)
-        
-        price_btc = random.uniform(0.00001, 0.0001)
-        tokens_received = int((amount_btc_sats / 100_000_000) / price_btc)
-        tokens_received = int(tokens_received * (1 - slippage_pct / 100))
-        
-        txid = hashlib.sha256(
-            f"{wallet_name}{token_address}{amount_btc_sats}{time.time()}".encode()
-        ).hexdigest()[:16]
-        
-        return {
-            "status": "success",
-            "txid": f"mock_{txid}",
-            "tokens_received": tokens_received,
-            "tokens_received_sats": tokens_received,
-            "btc_spent": amount_btc_sats,
-            "btc_spent_sats": amount_btc_sats,
-            "execution_price": price_btc,
-            "request_id": txid,
-            "message": f"✅ MOCK: Bought {tokens_received:,} tokens",
-            "mode": "MOCK"
-        }
-    
-    async def _mock_sell_token(
-        self,
-        wallet_name: str,
-        token_address: str,
-        amount_tokens: int,
-        slippage_pct: float
-    ) -> Dict[str, Any]:
-        """🎭 MOCK реализация продажи"""
-        import random
-        import hashlib
-        import time
-        
-        print(f"[MOCK] 💸 Selling {amount_tokens:,} tokens of {token_address[:16]}...")
-        await asyncio.sleep(0.3)
-        
-        price_btc = random.uniform(0.00001, 0.0001)
-        btc_received_sats = int((amount_tokens * price_btc) * 100_000_000)
-        btc_received_sats = int(btc_received_sats * (1 - slippage_pct / 100))
-        
-        txid = hashlib.sha256(
-            f"{wallet_name}{token_address}{amount_tokens}{time.time()}".encode()
-        ).hexdigest()[:16]
-        
-        return {
-            "status": "success",
-            "txid": f"mock_{txid}",
-            "btc_received": btc_received_sats,
-            "btc_received_sats": btc_received_sats,
-            "tokens_sold": amount_tokens,
-            "tokens_sold_sats": amount_tokens,
-            "execution_price": price_btc,
-            "request_id": txid,
-            "message": f"✅ MOCK: Sold {amount_tokens:,} tokens for {btc_received_sats:,} sats",
-            "mode": "MOCK"
-        }
-    
+    def __init__(self, api_base: str = "https://api.amm.flashnet.xyz", timeout: int = 15):
+        self.api_base = api_base
+        self.timeout = timeout
+        self.auth_token = None
+        self.token_expiry = None
+        self.use_mock = True  # Default to mock mode
+
+    async def authenticate(self):
+        """Authenticate with Flashnet AMM"""
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                # Try to get challenge
+                challenge_resp = await client.post(
+                    f"{self.api_base}/v1/auth/challenge",
+                    json={"publicKey": "mock_public_key"}
+                )
+                
+                if challenge_resp.status_code == 200:
+                    self.use_mock = False
+                    print("[INFO] Flashnet is accessible, using REAL mode")
+                else:
+                    self.use_mock = True
+                    print(f"[WARN] Flashnet returned {challenge_resp.status_code}, using MOCK mode")
+                    
+        except Exception as e:
+            print(f"[WARN] Flashnet auth check failed: {e}, using MOCK mode")
+            self.use_mock = True
+
     async def buy_token(
         self,
-        wallet_name: str,
         token_address: str,
-        amount_btc_sats: int,
-        slippage_pct: float = 1.0
-    ) -> Dict[str, Any]:
-        """Купить токен за BTC"""
+        amount_sats: int,
+        wallet_name: str,
+        slippage: float,
+        tip_sats: int = 0,
+        user_id: int | None = None,  # ← ДОБАВЛЕНО
+    ) -> dict:
+        """
+        Покупка токена через Flashnet AMM
+        """
+        print(f"[INFO] Buy token via Flashnet AMM (mode: {'MOCK' if self.use_mock else 'REAL'})...")
+        print(f"  Token: {token_address[:20]}...")
+        print(f"  Amount: {amount_sats} sats")
+        print(f"  Slippage: {slippage}%")
         
-        # ✅ MOCK MODE
-        if is_mock_mode():
-            try:
-                return await self._mock_buy_token(
-                    wallet_name=wallet_name,
-                    token_address=token_address,
-                    amount_btc_sats=amount_btc_sats,
-                    slippage_pct=slippage_pct
-                )
-            except Exception as e:
-                return {
-                    "status": "error",
-                    "error": str(e),
-                    "message": f"❌ MOCK Error: {str(e)}",
-                    "mode": "MOCK"
-                }
-        
-        # ❌ REAL MODE
-        print(f"[REAL] 🛒 Buying from real Flashnet AMM...")
-        
+        if self.use_mock:
+            return self._mock_buy(token_address, amount_sats, slippage)
+
         try:
-            from flashnet_amm_client import FlashnetAMMClient
-            
-            wallets = self.wallet_manager.list_wallets()
-            if wallet_name not in wallets:
-                return {
-                    "status": "error",
-                    "error": f"Wallet {wallet_name} not found",
-                    "message": f"❌ Wallet not found",
-                    "mode": "REAL"
-                }
-            
-            # Создаём и используем реальный клиент
-            # (реальный код интеграции)
-            
-            return {
-                "status": "error",
-                "error": "Real mode not fully implemented",
-                "message": "❌ Real Flashnet integration coming soon",
-                "mode": "REAL"
+            # ← ДОБАВЛЕНО: расчёт комиссий и слиппеджа
+            total_fee_bps = get_total_integrator_fee_bps(int(user_id) if user_id is not None else 0)
+            max_slippage_bps = int(round(float(slippage) * 100))  # % → bps
+
+            # SIMULATE
+            simulate_payload = {
+                "poolId": "pool_123",
+                "assetInAddress": "BTC",
+                "assetOutAddress": token_address,
+                "amountIn": int(amount_sats),
+                "maxSlippageBps": max_slippage_bps,
+                # ← ДОБАВЛЕНО: поля для комиссий
+                "integratorPublicKey": FLASHNET_INTEGRATOR_PUBLIC_KEY,
+                "totalIntegratorFeeRateBps": int(total_fee_bps),
             }
-        
+
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                sim_resp = await client.post(
+                    f"{self.api_base}/v1/swaps/simulate",
+                    json=simulate_payload,
+                    headers={"Authorization": f"Bearer {self.auth_token}"}
+                )
+                
+                if sim_resp.status_code != 200:
+                    print(f"[ERROR] Simulate failed: {sim_resp.status_code}")
+                    return {"status": "error", "error": f"Simulate failed: {sim_resp.status_code}"}
+
+            sim_data = sim_resp.json()
+            print(f"[INFO] Simulate OK: {sim_data.get('amountOut', 0)} tokens out")
+
+            # EXECUTE
+            execute_payload = {
+                "poolId": "pool_123",
+                "assetInAddress": "BTC",
+                "assetOutAddress": token_address,
+                "amountIn": int(amount_sats),
+                "maxSlippageBps": max_slippage_bps,
+                "userPublicKey": "user_pubkey_placeholder",
+                "assetInSparkTransferId": "transfer_id_placeholder",
+                "nonce": "nonce_placeholder",
+                "signature": "signature_placeholder",
+                # ← ДОБАВЛЕНО: поля для комиссий
+                "integratorPublicKey": FLASHNET_INTEGRATOR_PUBLIC_KEY,
+                "totalIntegratorFeeRateBps": int(total_fee_bps),
+            }
+
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                exec_resp = await client.post(
+                    f"{self.api_base}/v1/swaps/execute",
+                    json=execute_payload,
+                    headers={"Authorization": f"Bearer {self.auth_token}"}
+                )
+                
+                if exec_resp.status_code != 200:
+                    print(f"[ERROR] Execute failed: {exec_resp.status_code}")
+                    return {"status": "error", "error": f"Execute failed: {exec_resp.status_code}"}
+
+            exec_data = exec_resp.json()
+            txid = exec_data.get("txId", f"real_{datetime.now().timestamp()}")
+            
+            print(f"[SUCCESS] Buy executed: {txid}")
+            return {
+                "status": "success",
+                "txid": txid,
+                "amount_out": sim_data.get("amountOut", 0),
+            }
+
         except Exception as e:
-            return {
-                "status": "error",
-                "error": str(e),
-                "message": f"❌ Real Mode Error: {str(e)}",
-                "mode": "REAL"
-            }
-    
+            print(f"[ERROR] Buy failed: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            return {"status": "error", "error": str(e)}
+
     async def sell_token(
         self,
-        wallet_name: str,
         token_address: str,
-        amount_tokens: int,
-        slippage_pct: float = 1.0
-    ) -> Dict[str, Any]:
-        """Продать токен за BTC"""
+        token_amount: int,
+        wallet_name: str,
+        slippage: float,
+        user_id: int | None = None,  # ← ДОБАВЛЕНО
+    ) -> dict:
+        """
+        Продажа токена через Flashnet AMM
+        """
+        print(f"[INFO] Sell token via Flashnet AMM (mode: {'MOCK' if self.use_mock else 'REAL'})...")
+        print(f"  Token: {token_address[:20]}...")
+        print(f"  Amount: {token_amount} tokens")
+        print(f"  Slippage: {slippage}%")
         
-        # ✅ MOCK MODE
-        if is_mock_mode():
-            try:
-                return await self._mock_sell_token(
-                    wallet_name=wallet_name,
-                    token_address=token_address,
-                    amount_tokens=amount_tokens,
-                    slippage_pct=slippage_pct
-                )
-            except Exception as e:
-                return {
-                    "status": "error",
-                    "error": str(e),
-                    "message": f"❌ MOCK Error: {str(e)}",
-                    "mode": "MOCK"
-                }
-        
-        # ❌ REAL MODE
-        print(f"[REAL] 💸 Selling to real Flashnet AMM...")
-        
+        if self.use_mock:
+            return self._mock_sell(token_address, token_amount, slippage)
+
         try:
-            return {
-                "status": "error",
-                "error": "Real mode not fully implemented",
-                "message": "❌ Real Flashnet integration coming soon",
-                "mode": "REAL"
+            # ← ДОБАВЛЕНО: расчёт комиссий и слиппеджа
+            total_fee_bps = get_total_integrator_fee_bps(int(user_id) if user_id is not None else 0)
+            max_slippage_bps = int(round(float(slippage) * 100))  # % → bps
+
+            # SIMULATE
+            simulate_payload = {
+                "poolId": "pool_123",
+                "assetInAddress": token_address,
+                "assetOutAddress": "BTC",
+                "amountIn": int(token_amount),
+                "maxSlippageBps": max_slippage_bps,
+                # ← ДОБАВЛЕНО: поля для комиссий
+                "integratorPublicKey": FLASHNET_INTEGRATOR_PUBLIC_KEY,
+                "totalIntegratorFeeRateBps": int(total_fee_bps),
             }
-        
+
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                sim_resp = await client.post(
+                    f"{self.api_base}/v1/swaps/simulate",
+                    json=simulate_payload,
+                    headers={"Authorization": f"Bearer {self.auth_token}"}
+                )
+                
+                if sim_resp.status_code != 200:
+                    print(f"[ERROR] Simulate failed: {sim_resp.status_code}")
+                    return {"status": "error", "error": f"Simulate failed: {sim_resp.status_code}"}
+
+            sim_data = sim_resp.json()
+            print(f"[INFO] Simulate OK: {sim_data.get('amountOut', 0)} sats out")
+
+            # EXECUTE
+            execute_payload = {
+                "poolId": "pool_123",
+                "assetInAddress": token_address,
+                "assetOutAddress": "BTC",
+                "amountIn": int(token_amount),
+                "maxSlippageBps": max_slippage_bps,
+                "userPublicKey": "user_pubkey_placeholder",
+                "assetInSparkTransferId": "transfer_id_placeholder",
+                "nonce": "nonce_placeholder",
+                "signature": "signature_placeholder",
+                # ← ДОБАВЛЕНО: поля для комиссий
+                "integratorPublicKey": FLASHNET_INTEGRATOR_PUBLIC_KEY,
+                "totalIntegratorFeeRateBps": int(total_fee_bps),
+            }
+
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                exec_resp = await client.post(
+                    f"{self.api_base}/v1/swaps/execute",
+                    json=execute_payload,
+                    headers={"Authorization": f"Bearer {self.auth_token}"}
+                )
+                
+                if exec_resp.status_code != 200:
+                    print(f"[ERROR] Execute failed: {exec_resp.status_code}")
+                    return {"status": "error", "error": f"Execute failed: {exec_resp.status_code}"}
+
+            exec_data = exec_resp.json()
+            txid = exec_data.get("txId", f"real_{datetime.now().timestamp()}")
+            
+            print(f"[SUCCESS] Sell executed: {txid}")
+            return {
+                "status": "success",
+                "txid": txid,
+                "amount_out": sim_data.get("amountOut", 0),
+            }
+
         except Exception as e:
-            return {
-                "status": "error",
-                "error": str(e),
-                "message": f"❌ Real Mode Error: {str(e)}",
-                "mode": "REAL"
-            }
-    
-    async def close_all(self):
-        """Закрыть все соединения"""
-        self._clients_cache.clear()
+            print(f"[ERROR] Sell failed: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            return {"status": "error", "error": str(e)}
 
+    def _mock_buy(self, token_address: str, amount_sats: int, slippage: float) -> dict:
+        """Mock покупка для тестирования"""
+        token_amount = int(amount_sats / 1000)  # условно
+        txid = f"mock_buy_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        print(f"[MOCK] Bought {token_amount} tokens for {amount_sats} sats")
+        return {
+            "status": "success",
+            "txid": txid,
+            "amount_out": token_amount,
+            "is_mock": True,
+        }
 
-# Convenience функции
-async def execute_buy(
-    wallet_manager,
-    wallet_name: str,
-    token_address: str,
-    amount_btc_sats: int,
-    slippage_pct: float = 1.0
-) -> Dict[str, Any]:
-    """Купить токен"""
-    integration = FlashnetSwapIntegration(wallet_manager)
-    try:
-        return await integration.buy_token(
-            wallet_name=wallet_name,
-            token_address=token_address,
-            amount_btc_sats=amount_btc_sats,
-            slippage_pct=slippage_pct
-        )
-    finally:
-        await integration.close_all()
-
-
-async def execute_sell(
-    wallet_manager,
-    wallet_name: str,
-    token_address: str,
-    amount_tokens: int,
-    slippage_pct: float = 1.0
-) -> Dict[str, Any]:
-    """Продать токен"""
-    integration = FlashnetSwapIntegration(wallet_manager)
-    try:
-        return await integration.sell_token(
-            wallet_name=wallet_name,
-            token_address=token_address,
-            amount_tokens=amount_tokens,
-            slippage_pct=slippage_pct
-        )
-    finally:
-        await integration.close_all()
+    def _mock_sell(self, token_address: str, token_amount: int, slippage: float) -> dict:
+        """Mock продажа для тестирования"""
+        sats_out = token_amount * 1000  # условно
+        txid = f"mock_sell_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        print(f"[MOCK] Sold {token_amount} tokens for {sats_out} sats")
+        return {
+            "status": "success",
+            "txid": txid,
+            "amount_out": sats_out,
+            "is_mock": True,
+        }

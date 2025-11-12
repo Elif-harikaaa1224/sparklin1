@@ -4,41 +4,28 @@
 
 from aiogram import types
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from token_info import token_service
-from sell_keyboards import create_sell_keyboard, create_wallet_selection_keyboard_sell
+from sell_keyboards import create_sell_keyboard
+# ← ДОБАВЛЕНО
+from referral_service import get_user_ref_bps
+from config import INTEGRATOR_DEV_FEE_BPS
 import sys
 
-
-# Импортируем глобальные переменные отдельно, чтобы избежать циклического импорта
-def get_wallet_manager():
-    """Получить wallet_manager из telegram_bot"""
-    from telegram_bot import wallet_manager
-    return wallet_manager
 
 def get_wallet_states():
     """Получить WalletStates из telegram_bot"""
     from telegram_bot import WalletStates
     return WalletStates
 
-def get_token_position(wallet_name: str, token_address: str) -> dict:
-    """Получить позицию по токену"""
-    from telegram_bot import load_positions
-    positions = load_positions()
-    if wallet_name not in positions:
-        return None
-    
-    if token_address not in positions[wallet_name]:
-        return None
-    
-    pos = positions[wallet_name][token_address]
-    
-    return {
-        "amount_tokens": pos.get("amount_sats", 0),
-        "total_bought": pos.get("total_bought", 0),
-        "total_sold": pos.get("total_sold", 0),
-        "wallet_name": wallet_name
-    }
+
+def get_wallet_manager():
+    """Безопасное получение wallet_manager из telegram_bot"""
+    import sys
+    telegram_bot = sys.modules.get("telegram_bot")
+    if telegram_bot and hasattr(telegram_bot, "wallet_manager"):
+        return telegram_bot.wallet_manager
+    from telegram_bot import wallet_manager
+    return wallet_manager
 
 
 async def cmd_sell(message: types.Message, state: FSMContext):
@@ -48,387 +35,286 @@ async def cmd_sell(message: types.Message, state: FSMContext):
     wallet_manager = get_wallet_manager()
     WalletStates = get_wallet_states()
     user_id = message.from_user.id
-    print(f"[DEBUG] User {user_id} started /sell command")
-    
-    # Проверяем наличие кошельков
+    print(f"[SELL_CMD] User {user_id} started /sell command")
+
     wallets = wallet_manager.list_wallets()
     if not wallets:
         await message.answer(
-            "❌ You don't have any wallets!\n\n"
-            "First create a wallet: /create_wallet"
+            "❌ У вас нет кошельков!\n\n"
+            "Сначала создайте кошелек: /create_wallet"
         )
         return
-    
-    # Проверяем был ли передан адрес токена
-    text_parts = message.text.split()
-    if len(text_parts) > 1:
-        # Адрес передан, показываем окно продажи сразу
-        token_addr = text_parts[1].strip()
-        await show_sell_window(message, state, token_addr)
-    else:
-        # Запрашиваем адрес токена
-        WalletStates = get_wallet_states()
-        await state.set_state(WalletStates.waiting_sell_token_address)
-        
-        await message.answer(
-            "💸 <b>Продажа токена</b>\n\n"
-            "📝 Введите адрес токена для продажи:\n\n"
-            "📋 <b>Формат адреса:</b>\n"
-            "• Начинается с <code>btkn1</code>\n"
-            "• Пример: <code>btkn1qyg5c7vxq7z2h9j3k4l5m6n7p8</code>\n\n"
-            "💡 <b>Подсказка:</b>\n"
-            "• Посмотрите адрес в /portfolio\n"
-            "• Или скопируйте с <a href='https://luminex.io'>Luminex.io</a>\n\n"
-            "✍️ Введите адрес токена:",
-            parse_mode="HTML"
-        )
 
+    await state.set_state(WalletStates.waiting_sell_token_address)
 
-async def show_sell_window(message: types.Message, state: FSMContext, token_addr: str):
-    """Показать окно продажи с полной информацией"""
-    wallet_manager = get_wallet_manager()
-    WalletStates = get_wallet_states()
-    user_id = message.from_user.id
-    
-    # Валидация адреса
-    if not wallet_manager.validate_spark_btkn_address(token_addr):
-        await message.answer(
-            "❌ Неверный адрес токена!\n\n"
-            "📋 <b>Требования к адресу:</b>\n"
-            "• Должен начинаться с <code>btkn1</code>\n"
-            "• Длина: 20-120 символов\n"
-            "• Только латинские буквы и цифры (без 1, b, i, o)\n\n"
-            "📝 <b>Пример правильного адреса:</b>\n"
-            "<code>btkn1qyg5c7vxq7z2h9j3k4l5m6n7p8q9r0s2t3u4v5w6x7y8z9</code>\n\n"
-            "💡 <b>Где взять адрес:</b>\n"
-            "• Из вашего портфеля /portfolio\n"
-            "• Или скопируйте из Luminex.io\n\n"
-            "🔄 Попробуйте еще раз:",
-            parse_mode="HTML"
-        )
-        return
-    
-    await message.answer("⏳ Loading token data...")
-    
-    try:
-        # Получаем информацию о токене
-        token_info = await token_service.get_token_info(token_addr)
-        
-        # Получаем кошельки
-        wallets = wallet_manager.list_wallets()
-        first_wallet = list(wallets.keys())[0]
-        wallet_addr = wallets[first_wallet]['address']
-        
-        # Получаем позицию пользователя
-        position = get_token_position(first_wallet, token_addr)
-        
-        if not position or position['amount_tokens'] == 0:
-            await message.answer(
-                "⚠️ You don't have any of this token!\n\n"
-                f"Token: <code>{token_addr}</code>\n"
-                "Buy tokens using /buy",
-                parse_mode="HTML"
-            )
-            await state.clear()
-            return
-        
-        # Получаем баланс кошелька
-        try:
-            bal = await wallet_manager.get_wallet_balance(wallet_addr)
-            balance_btc = bal.get("balance_btc", "0.00000000")
-        except:
-            balance_btc = "0.00000000"
-        
-        # Сохраняем данные в состояние
-        await state.update_data(
-            token_address=token_addr,
-            token_info=token_info,
-            selected_wallet="W1",
-            selected_wallet_name=first_wallet,
-            selected_percent=100,
-            sell_slippage=10.0,
-            wallet_balance=balance_btc,
-            position=position
-        )
-        
-        # Устанавливаем состояние
-        await state.set_state(WalletStates.sell_confirming)
-        
-        # Отправляем сообщение с окном продажи
-        await send_sell_message(message, state)
-        
-    except Exception as e:
-        print(f"[ERROR] Failed to show sell window: {e}")
-        import traceback
-        traceback.print_exc()
-        await message.answer(f"❌ Error: {str(e)}")
-        await state.clear()
-
-
-async def send_sell_message(message: types.Message, state: FSMContext):
-    """Отправить/обновить сообщение окна продажи"""
-    wallet_manager = get_wallet_manager()
-    data = await state.get_data()
-    
-    token_addr = data['token_address']
-    token_info = data['token_info']
-    selected_wallet = data['selected_wallet']
-    selected_percent = data.get('selected_percent', 100)
-    slippage = data.get('sell_slippage', 10.0)
-    balance_btc = data['wallet_balance']
-    position = data['position']
-    
-    # Данные токена
-    symbol = token_info.get("symbol", "UNKNOWN")
-    name = token_info.get("name", "Unknown")
-    price_usd = token_info.get("price_usd", 0)
-    price = token_service.format_price(price_usd)
-    liq = token_service.format_liquidity(token_info.get("liquidity_usd", 0))
-    mc = token_service.format_market_cap(token_info.get("market_cap_usd", 0))
-    volume = token_service.format_liquidity(token_info.get("volume_24h", 0))
-    
-    # Данные позиции
-    amount_tokens = position['amount_tokens']
-    total_bought = position['total_bought']
-    total_sold = position['total_sold']
-    wallet_name = position['wallet_name']
-    
-    # Рассчитываем текущую стоимость позиции в USD
-    current_value_usd = amount_tokens * price_usd if price_usd > 0 else 0
-    
-    # Форматируем количество токенов
-    if amount_tokens >= 1_000_000:
-        tokens_display = f"{amount_tokens / 1_000_000:.2f}M"
-    elif amount_tokens >= 1_000:
-        tokens_display = f"{amount_tokens / 1_000:.2f}K"
-    else:
-        tokens_display = f"{amount_tokens}"
-    
-    # Форматируем стоимость
-    if current_value_usd >= 1_000:
-        value_display = f"${current_value_usd / 1_000:.2f}K"
-    else:
-        value_display = f"${current_value_usd:.2f}"
-    
-    msg = (
-        f"💸 <b>Sell Token</b>\n\n"
-        f"🏷 <b>{name}</b> ({symbol})\n"
-        f"📍 <code>{token_addr[:20]}...{token_addr[-10:]}</code>\n\n"
-        f"💵 Price: {price}\n"
-        f"💧 Liquidity: {liq}\n"
-        f"📊 Market Cap: {mc}\n"
-        f"📈 24h Volume: {volume}\n\n"
-        f"━━━━━━━━━━━━━━━━━\n"
-        f"💼 <b>Your Position:</b>\n"
-        f"🪙 Amount: <b>{tokens_display}</b> tokens\n"
-        f"💵 Value: <b>{value_display}</b>\n"
-        f"👛 Wallet: <b>{wallet_name[:15]}...</b>\n"
-        f"━━━━━━━━━━━━━━━━━\n\n"
-        f"👇 <b>Select amount to sell:</b>"
+    await message.answer(
+        "🛍️ <b>Продажа токена</b>\n\n"
+        "📝 Введите адрес токена:\n\n"
+        "📋 <b>Формат адреса токена:</b>\n"
+        "• Начинается с <code>btkn1</code>\n\n"
+        "💡 <b>Где взять адрес:</b>\n"
+        "• Из вашего портфеля\n"
+        "• Или из проводника токенов SPARK\n\n"
+        "✍️ Введите адрес:",
+        parse_mode="HTML"
     )
-    
-    # Создаем клавиатуру
-    wallets = wallet_manager.list_wallets()
-    keyboard = create_sell_keyboard(
-        wallets=list(wallets.keys()),
-        selected_wallet=selected_wallet,
-        selected_percent=selected_percent,
-        slippage=slippage
-    )
-    
-    await message.answer(msg, reply_markup=keyboard, parse_mode="HTML")
 
 
 async def handle_sell_token_input(message: types.Message, state: FSMContext):
-    """Обработка ввода адреса токена для продажи"""
-    token_addr = message.text.strip()
-    await show_sell_window(message, state, token_addr)
-
-
-async def handle_custom_sell_percent_input(message: types.Message, state: FSMContext):
-    """✅ НОВАЯ ФУНКЦИЯ - Обработка ввода custom процента продажи"""
-    WalletStates = get_wallet_states()
-    
-    try:
-        # Парсим процент
-        percent_text = message.text.strip()
-        
-        # Проверяем что это число
-        if not percent_text.isdigit():
-            await message.answer(
-                "❌ <b>Ошибка!</b>\n\n"
-                "Введите <b>число</b> от 1 до 100\n\n"
-                "Примеры:\n"
-                "• <code>30</code> для 30%\n"
-                "• <code>50</code> для 50%\n"
-                "• <code>100</code> для 100%",
-                parse_mode="HTML"
-            )
-            return
-        
-        percent = int(percent_text)
-        
-        # Валидируем диапазон
-        if percent < 1 or percent > 100:
-            await message.answer(
-                "❌ <b>Ошибка!</b>\n\n"
-                "Процент должен быть от 1 до 100\n\n"
-                f"Вы ввели: {percent}",
-                parse_mode="HTML"
-            )
-            return
-        
-        # Сохраняем процент
-        await state.update_data(selected_percent=percent)
-        
-        # Возвращаемся в состояние подтверждения продажи
-        await state.set_state(WalletStates.sell_confirming)
-        
-        # Обновляем сообщение
-        await update_sell_message(message, state)
-        
-    except Exception as e:
-        print(f"[ERROR] Custom sell percent: {e}")
-        await message.answer(f"❌ Error: {str(e)}")
-
-
-async def handle_sell_callbacks(callback: types.CallbackQuery, state: FSMContext):
-    """Обработчик callback для кнопок продажи"""
-    data = callback.data
+    """
+    Обработка ввода адреса токена для продажи
+    """
     wallet_manager = get_wallet_manager()
-    
-    # Refresh - обновление данных
-    if data == "sell_refresh":
-        await callback.answer("🔄 Refreshing...")
-        state_data = await state.get_data()
-        token_addr = state_data.get("token_address")
-        
-        if not token_addr:
-            await callback.answer("❌ Error")
-            return
-        
-        try:
-            # Обновляем информацию о токене
-            token_info = await token_service.get_token_info(token_addr)
-            await state.update_data(token_info=token_info)
-            
-            # Обновляем сообщение
-            await update_sell_message(callback.message, state)
-        except Exception as e:
-            print(f"[ERROR] Sell refresh: {e}")
-            await callback.answer("❌ Error")
-    
-    # Back - возврат в меню
-    elif data == "sell_back":
-        await callback.answer("◀️ Back")
-        await state.clear()
-        
-        # Отправляем главное меню
-        try:
-            from main_menu_keyboard import create_main_menu_keyboard
-            await callback.message.answer(
-                "Main menu",
-                reply_markup=create_main_menu_keyboard()
-            )
-        except:
-            await callback.message.answer("Use /start to return to main menu")
-    
-    # Выбор процента продажи
-    elif data.startswith("sell_percent_"):
-        percent = int(data.replace("sell_percent_", ""))
-        await callback.answer(f"Selected {percent}%")
-        
-        await state.update_data(selected_percent=percent)
-        
-        # Обновляем сообщение
-        await update_sell_message(callback.message, state)
-    
-    # Custom процент
-    elif data == "sell_custom_percent":
-        WalletStates = get_wallet_states()
-        await callback.answer("✏️ Enter percent")
-        await state.set_state(WalletStates.waiting_custom_sell_percent)
-        await callback.message.answer(
-            "📊 <b>Enter sell percentage:</b>\n\n"
-            "For example: <code>30</code> (for 30%)\n"
-            "Range: 1-100%",
+    WalletStates = get_wallet_states()
+    user_id = message.from_user.id
+    token_input = message.text.strip()
+
+    if not token_input.startswith("btkn1"):
+        await message.answer(
+            "❌ Неверный формат!\n\n"
+            "Адрес токена должен начинаться с <code>btkn1</code>",
             parse_mode="HTML"
         )
-    
-    else:
-        await callback.answer()
+        return
 
+    is_valid = wallet_manager.validate_spark_btkn_address(token_input)
+    if not is_valid:
+        await message.answer(
+            "❌ Неверный адрес токена!",
+            parse_mode="HTML"
+        )
+        return
 
-async def update_sell_message(message: types.Message, state: FSMContext):
-    """Обновить сообщение окна продажи"""
-    wallet_manager = get_wallet_manager()
-    data = await state.get_data()
-    
-    token_addr = data['token_address']
-    token_info = data['token_info']
-    selected_wallet = data['selected_wallet']
-    selected_percent = data.get('selected_percent', 100)
-    slippage = data.get('sell_slippage', 10.0)
-    position = data['position']
-    
-    # Данные токена
-    symbol = token_info.get("symbol", "UNKNOWN")
-    name = token_info.get("name", "Unknown")
-    price_usd = token_info.get("price_usd", 0)
-    price = token_service.format_price(price_usd)
-    liq = token_service.format_liquidity(token_info.get("liquidity_usd", 0))
-    mc = token_service.format_market_cap(token_info.get("market_cap_usd", 0))
-    volume = token_service.format_liquidity(token_info.get("volume_24h", 0))
-    
-    # Данные позиции
-    amount_tokens = position['amount_tokens']
-    wallet_name = position['wallet_name']
-    
-    # Рассчитываем текущую стоимость позиции в USD
-    current_value_usd = amount_tokens * price_usd if price_usd > 0 else 0
-    
-    # Форматируем количество токенов
-    if amount_tokens >= 1_000_000:
-        tokens_display = f"{amount_tokens / 1_000_000:.2f}M"
-    elif amount_tokens >= 1_000:
-        tokens_display = f"{amount_tokens / 1_000:.2f}K"
-    else:
-        tokens_display = f"{amount_tokens}"
-    
-    # Форматируем стоимость
-    if current_value_usd >= 1_000:
-        value_display = f"${current_value_usd / 1_000:.2f}K"
-    else:
-        value_display = f"${current_value_usd:.2f}"
-    
-    msg = (
-        f"💸 <b>Sell Token</b>\n\n"
-        f"🏷 <b>{name}</b> ({symbol})\n"
-        f"📍 <code>{token_addr[:20]}...{token_addr[-10:]}</code>\n\n"
-        f"💵 Price: {price}\n"
-        f"💧 Liquidity: {liq}\n"
-        f"📊 Market Cap: {mc}\n"
-        f"📈 24h Volume: {volume}\n\n"
-        f"━━━━━━━━━━━━━━━━━\n"
-        f"💼 <b>Your Position:</b>\n"
-        f"🪙 Amount: <b>{tokens_display}</b> tokens\n"
-        f"💵 Value: <b>{value_display}</b>\n"
-        f"👛 Wallet: <b>{wallet_name[:15]}...</b>\n"
-        f"━━━━━━━━━━━━━━━━━\n\n"
-        f"👇 <b>Select amount to sell:</b>"
-    )
-    
-    # Создаем клавиатуру
-    wallets = wallet_manager.list_wallets()
-    keyboard = create_sell_keyboard(
-        wallets=list(wallets.keys()),
-        selected_wallet=selected_wallet,
-        selected_percent=selected_percent,
-        slippage=slippage
-    )
-    
     try:
-        await message.edit_text(msg, reply_markup=keyboard, parse_mode="HTML")
-    except:
-        # Если не удалось отредактировать, отправляем новое
-        await message.answer(msg, reply_markup=keyboard, parse_mode="HTML")
+        await message.answer("⏳ Загрузка информации о токене...")
+
+        token_info = await token_service.get_token_info(token_input)
+
+        wallets = wallet_manager.list_wallets()
+        wallet_list = list(wallets.keys())
+
+        first_wallet = wallet_list[0]
+        wallet_address = wallets[first_wallet]['address']
+
+        try:
+            balance_info = await wallet_manager.get_wallet_balance(wallet_address)
+            balance_sats = balance_info.get("balance_sats", 0)
+        except:
+            balance_sats = 0
+
+        await state.update_data(
+            token_address=token_input,
+            token_info=token_info,
+            selected_wallet="W1",
+            selected_wallet_name=first_wallet,
+            selected_percent=50,
+            wallet_balance_sats=balance_sats
+        )
+
+        message_text = await format_sell_message(token_info, balance_sats, "W1")
+
+        keyboard = create_sell_keyboard(
+            wallets=wallet_list,
+            selected_wallet="W1",
+            selected_percent=50,
+        )
+
+        await state.set_state(WalletStates.sell_confirming)
+
+        await message.answer(
+            message_text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"[ERROR] Failed to load token info: {error_msg}", file=sys.stderr)
+        await message.answer(
+            f"❌ Ошибка при загрузке информации о токене:\n{error_msg}",
+        )
+        await state.clear()
+
+
+async def format_sell_message(token_info: dict, wallet_balance_sats: int, selected_wallet: str) -> str:
+    """
+    Форматирование сообщения с информацией о продаже токена
+    """
+    symbol = token_info.get("symbol", "UNKNOWN")
+    name = token_info.get("name", "Unknown Token")
+    address = token_info.get("address", "")
+
+    price_usd = token_info.get("price_usd")
+    if price_usd:
+        price_str = token_service.format_price(price_usd)
+    else:
+        price_str = "~ при исполнении"
+
+    liquidity = token_info.get("liquidity_usd", 0)
+    market_cap = token_info.get("market_cap_usd", 0)
+    liq_str = token_service.format_liquidity(liquidity)
+    mc_str = token_service.format_market_cap(market_cap)
+
+    addr_short = f"{address[:10]}...{address[-10:]}" if address and len(address) > 20 else (address or "—")
+
+    try:
+        from btc_price import btc_price_service
+        btc_price = await btc_price_service.get_btc_price_usd()
+        usd_value = btc_price_service.sats_to_usd(wallet_balance_sats, btc_price)
+        usd_str = btc_price_service.format_usd(usd_value)
+        balance_display = f"{wallet_balance_sats:,} SATS ({usd_str})"
+    except Exception as e:
+        print(f"[DEBUG] USD conversion error: {e}", file=sys.stderr)
+        balance_display = f"{wallet_balance_sats:,} SATS"
+
+    message = (
+        f"🛍️ <b>Sell ${symbol}</b> — {name} 📉\n\n"
+        f"📍 <code>{addr_short}</code>\n\n"
+        f"💰 Balance: {balance_display} — {selected_wallet}\n"
+        f"💵 Price: {price_str}\n"
+        f"💧 LIQ: {liq_str} — 📊 MC: {mc_str}\n\n"
+        f"👇 Select options below:"
+    )
+    return message
+
+
+async def handle_sell_confirm(callback: types.CallbackQuery, state: FSMContext):
+    """Подтверждение продажи"""
+    WalletStates = get_wallet_states()
+    data = await state.get_data()
+
+    token_info = data.get("token_info", {}) or {}
+    token_address = token_info.get("address", "")
+    symbol = token_info.get("symbol", "UNKNOWN")
+    name = token_info.get("name", "Unknown Token")
+
+    selected_percent = float(data.get("selected_percent", 50))
+    selected_wallet = data.get("selected_wallet", "W1")
+
+    balance_sats = int(data.get("wallet_balance_sats", 0) or 0)
+
+    try:
+        balance_btc = token_service.sats_to_btc(balance_sats)
+    except Exception:
+        balance_btc = 0.0
+
+    est_token_amount = 0.0
+    display_price_usd = float(token_info.get("price_usd") or 0.0)
+    try:
+        calc = await token_service.calculate_tokens_for_btc(token_address, 0.001)  # условно
+        if calc:
+            est_token_amount = float(calc.get("token_amount") or 0.0)
+            if not display_price_usd:
+                display_price_usd = float(calc.get("price_usd") or 0.0)
+    except Exception:
+        pass
+
+    addr_short = f"{token_address[:15]}...{token_address[-10:]}" if token_address else "—"
+
+    receive_line = "📦 Вы получите: <i>~ будет рассчитано при подтверждении</i>"
+    price_line = (
+        f"💵 Цена за токен: <b>${display_price_usd:.8f}</b>"
+        if display_price_usd > 0
+        else "💵 Цена за токен: <i>~ при исполнении</i>"
+    )
+
+    # ← ДОБАВЛЕНО: строка с комиссиями
+    user_id = callback.from_user.id
+    user_ref_bps = get_user_ref_bps(user_id)
+    total_bps = INTEGRATOR_DEV_FEE_BPS + user_ref_bps
+    fee_line = (
+        f"💸 Комиссия: интегратор {INTEGRATOR_DEV_FEE_BPS/100:.2f}% "
+        f"+ реф.уровень {user_ref_bps/100:.2f}% (итого {total_bps/100:.2f}%)"
+    )
+
+    confirm_message = (
+        "🔔 <b>Подтверждение продажи</b>\n\n"
+        f"🪙 Токен: <b>${symbol}</b> — {name}\n"
+        f"📍 <code>{addr_short}</code>\n\n"
+        f"📊 Продаёте: <b>{selected_percent:.1f}%</b> вашего баланса\n\n"
+        f"{receive_line}\n"
+        f"{price_line}\n\n"
+        f"{fee_line}\n"  # ← ВСТАВЛЕНА СТРОКА С КОМИССИЕЙ
+        f"💼 Кошелёк: <b>{selected_wallet}</b>"
+    )
+
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [types.InlineKeyboardButton(text="✅ Confirm", callback_data="sell_execute")],
+        [types.InlineKeyboardButton(text="❌ Cancel", callback_data="sell_cancel")]
+    ])
+
+    await callback.message.edit_text(confirm_message, reply_markup=keyboard, parse_mode="HTML")
+    await state.set_state(WalletStates.sell_confirming)
+    await callback.answer("👆 Проверь детали и подтверди")
+
+
+async def handle_sell_execute(callback: types.CallbackQuery, state: FSMContext):
+    """Выполнение продажи токена"""
+    await callback.answer("⏳ Выполнение продажи...")
+
+    wallet_manager = get_wallet_manager()
+
+    data = await state.get_data()
+    user_id = callback.from_user.id
+
+    token_info = data.get("token_info", {}) or {}
+    token_address = token_info.get("address", "")
+    symbol = token_info.get("symbol", "UNKNOWN")
+    selected_percent = float(data.get("selected_percent", 50))
+    selected_wallet_name = data.get("selected_wallet_name")
+
+    try:
+        await callback.message.edit_text(
+            f"⏳ <b>Продажа {symbol}...</b>\n\nПожалуйста, подождите...",
+            parse_mode="HTML"
+        )
+
+        token_amount = int(selected_percent * 100)  # условно
+
+        # ← ДОБАВЛЕНО: user_id в вызов
+        result = await wallet_manager.sell_meme(
+            contract_address=token_address,
+            token_amount=token_amount,
+            wallet_name=selected_wallet_name,
+            slippage=10.0,
+            user_id=user_id,  # ← ДОБАВЛЕНО
+        )
+
+        if result.get("status") != "success":
+            error_msg = result.get("error", result.get("message", "Неизвестная ошибка"))
+            raise Exception(error_msg)
+
+        txid = result.get("txid")
+        if not txid:
+            raise Exception("Транзакция не содержит TxID!")
+
+        success_message = (
+            f"✅ <b>Продажа выполнена!</b>\n\n"
+            f"🪙 Продано: <b>{token_amount} {symbol}</b>\n\n"
+            f"📋 Transaction ID:\n<code>{txid}</code>\n\n"
+            f"🎉 BTC будут зачислены на ваш кошелёк"
+        )
+        await callback.message.edit_text(success_message, parse_mode="HTML")
+        print(f"[SUCCESS] User {user_id} sold {token_amount} {symbol}")
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        await callback.message.edit_text(
+            "❌ <b>Ошибка при продаже!</b>\n\n"
+            f"Детали: {e}\n\n"
+            "Попробуйте ещё раз: /sell",
+            parse_mode="HTML"
+        )
+    finally:
+        await state.clear()
+
+
+async def handle_sell_cancel(callback: types.CallbackQuery, state: FSMContext):
+    """Отмена продажи"""
+    await callback.answer("❌ Продажа отменена")
+    await callback.message.edit_text(
+        "❌ <b>Продажа отменена</b>\n\nЧтобы продать токен, используйте /sell",
+        parse_mode="HTML"
+    )
+    await state.clear()

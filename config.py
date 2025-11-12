@@ -1,156 +1,80 @@
-"""
-Загрузчик конфигурации с поддержкой MOCK/REAL режимов
-"""
-
+# config.py
 import os
 from dotenv import load_dotenv
-from typing import Dict, Any
 
-# Загружаем .env файл
 load_dotenv()
 
-# ============================================
-# ГЛАВНЫЙ ФЛАГ - РЕЖИМ РАБОТЫ
-# ============================================
-USE_MOCK_MODE = os.getenv('USE_MOCK_MODE', 'true').lower() in ('true', '1', 'yes')
 
-print(f"\n{'='*60}")
-print(f"🎭 MODE: {'MOCK (Development)' if USE_MOCK_MODE else 'REAL (Production)'}")
-print(f"{'='*60}\n")
-
-# ============================================
-# 🤖 Telegram Bot
-# ============================================
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-
-if not TELEGRAM_BOT_TOKEN:
-    raise ValueError("❌ TELEGRAM_BOT_TOKEN not set in .env")
-
-print(f"✅ Telegram Bot Token: {TELEGRAM_BOT_TOKEN[:20]}...")
-
-# ============================================
-# 📡 Flashnet Configuration
-# ============================================
-FLASHNET_ENABLED = os.getenv('FLASHNET_ENABLED', 'true').lower() in ('true', '1', 'yes')
-FLASHNET_API_KEY = os.getenv('FLASHNET_API_KEY', '')
-FLASHNET_API_URL = os.getenv('FLASHNET_API_URL', 'https://api.amm.flashnet.xyz')
-
-if FLASHNET_ENABLED and not USE_MOCK_MODE and not FLASHNET_API_KEY:
-    print("⚠️  FLASHNET enabled but no API key - will use MOCK mode")
-    USE_MOCK_MODE = True
-
-print(f"📡 Flashnet: {'✅ Enabled' if FLASHNET_ENABLED else '❌ Disabled'}")
-if FLASHNET_ENABLED and not USE_MOCK_MODE:
-    print(f"   API Key: {FLASHNET_API_KEY[:10]}...")
-    print(f"   API URL: {FLASHNET_API_URL}")
-elif FLASHNET_ENABLED and USE_MOCK_MODE:
-    print(f"   Mode: 🎭 MOCK (Flashnet credentials will be ignored)")
-
-# ============================================
-# ⚡ Lightspark Configuration
-# ============================================
-LIGHTSPARK_ENABLED = os.getenv('LIGHTSPARK_ENABLED', 'true').lower() in ('true', '1', 'yes')
-LIGHTSPARK_CLIENT_ID = os.getenv('LIGHTSPARK_CLIENT_ID', '')
-LIGHTSPARK_CLIENT_SECRET = os.getenv('LIGHTSPARK_CLIENT_SECRET', '')
-LS_OAUTH_URL = os.getenv('LS_OAUTH_URL', 'https://api.lightspark.com/oauth/token')
-LS_GRAPHQL_URL = os.getenv('LS_GRAPHQL_URL', 'https://api.lightspark.com/graphql')
-LIGHTSPARK_NODE_ID = os.getenv('LIGHTSPARK_NODE_ID', '')
-LIGHTSPARK_NODE_PASSWORD = os.getenv('LIGHTSPARK_NODE_PASSWORD', '')
-
-if LIGHTSPARK_ENABLED and not USE_MOCK_MODE and not LIGHTSPARK_CLIENT_ID:
-    print("⚠️  LIGHTSPARK enabled but no credentials - will use MOCK mode")
-    USE_MOCK_MODE = True
-
-print(f"⚡ Lightspark: {'✅ Enabled' if LIGHTSPARK_ENABLED else '❌ Disabled'}")
-if LIGHTSPARK_ENABLED and not USE_MOCK_MODE:
-    print(f"   Client ID: {LIGHTSPARK_CLIENT_ID[:20]}...")
-    if LIGHTSPARK_NODE_ID:
-        print(f"   Node ID: {LIGHTSPARK_NODE_ID[:40]}...")
-
-# ============================================
-# 🔐 Security
-# ============================================
-MASTER_PASSWORD = os.getenv('MASTER_PASSWORD', 'spark_wallet_default_pwd')
-
-# ============================================
-# 🌐 API Endpoints
-# ============================================
-UTXO_API_URL = os.getenv('UTXO_API_URL', 'https://api.utxo.fun')
-BTC_PRICE_API_URL = os.getenv('BTC_PRICE_API_URL', 'https://api.coingecko.com')
-
-# ============================================
-# 📊 Logging & Debug
-# ============================================
-LOG_LEVEL = os.getenv('LOG_LEVEL', 'DEBUG' if USE_MOCK_MODE else 'INFO')
-DEBUG_API_REQUESTS = os.getenv('DEBUG_API_REQUESTS', 'true').lower() in ('true', '1', 'yes')
-
-# ============================================
-# 💾 Storage
-# ============================================
-WALLETS_DIR = os.getenv('WALLETS_DIR', './spark_wallets')
-LOGS_DIR = os.getenv('LOGS_DIR', './logs')
-TOKEN_CACHE_FILE = os.getenv('TOKEN_CACHE_FILE', './token_cache.json')
-
-# Создаем папки если их нет
-os.makedirs(WALLETS_DIR, exist_ok=True)
-os.makedirs(LOGS_DIR, exist_ok=True)
-
-print(f"📊 Logging: {LOG_LEVEL}")
-print(f"💾 Wallets dir: {WALLETS_DIR}")
-print(f"\n{'='*60}\n")
+# ---------- runtime flags ----------
+USE_MOCK_MODE = os.getenv("USE_MOCK_MODE", "true").lower() in ("1", "true", "yes")
+FLASH_ENABLED = os.getenv("FLASH_ENABLED", "true").lower() in ("1", "true", "yes")
 
 
-# ============================================
-# 🎭 РЕЖИМ ПЕРЕКЛЮЧЕНИЕ
-# ============================================
+# ---------- Flashnet ----------
+FLASHNET_API_BASE = os.getenv(
+    "FLASHNET_API_BASE",
+    "https://api.amm.flashnet.xyz"
+).strip()
+
+FLASHNET_INTEGRATOR_PUBLIC_KEY = os.getenv(
+    "FLASHNET_INTEGRATOR_PUBLIC_KEY",
+    ""
+).strip()
+
+HTTP_TIMEOUT_SECS = float(os.getenv("HTTP_TIMEOUT_SECS", "15.0"))
+HTTP_RETRIES = int(os.getenv("HTTP_RETRIES", "2"))
+
+HTTP_USER_AGENT = os.getenv(
+    "HTTP_USER_AGENT",
+    "SparkWalletBot/1.0 (+flashnet-integration)"
+).strip()
+
+
+# ---------- Комиссии (BPS: 100 bps = 1.00%) ----------
+# Наш фикс: всегда 1% интегратора (разрабы)
+INTEGRATOR_DEV_FEE_BPS = int(os.getenv("INTEGRATOR_DEV_FEE_BPS", "100"))  # 1.00%
+
+# Реф-уровни пользователя (добавляются сверху к нашим 1%):
+REF_TIER1_BPS = int(os.getenv("REF_TIER1_BPS", "25"))   # 0.25%
+REF_TIER2_BPS = int(os.getenv("REF_TIER2_BPS", "10"))   # 0.10%
+REF_TIER3_BPS = int(os.getenv("REF_TIER3_BPS", "1"))    # 0.01%
+
+# Торговля
+DEFAULT_SLIPPAGE_PERCENT = float(os.getenv("DEFAULT_SLIPPAGE_PERCENT", "10.0"))
+MAX_BUY_BTC = float(os.getenv("MAX_BUY_BTC", "1.0"))
+
+
+# ---------- Хелперы ----------
+def is_mock_mode() -> bool:
+    return bool(USE_MOCK_MODE)
 
 def get_trading_mode() -> str:
-    """Получить текущий режим торговли"""
-    return 'MOCK' if USE_MOCK_MODE else 'REAL'
+    return "MOCK" if is_mock_mode() else "REAL"
+
+def print_boot_banner() -> None:
+    mode = get_trading_mode()
+    print("=" * 60)
+    print(f"🎭 MODE: {mode}")
+    print(f"📡 Flashnet enabled: {FLASH_ENABLED}")
+    print(f"🌐 API: {FLASHNET_API_BASE}")
+    if mode == "REAL":
+        key_short = (
+            FLASHNET_INTEGRATOR_PUBLIC_KEY[:8] + "..." + FLASHNET_INTEGRATOR_PUBLIC_KEY[-8:]
+            if FLASHNET_INTEGRATOR_PUBLIC_KEY else "(not set)"
+        )
+        print(f"🔑 Integrator pubkey: {key_short}")
+    else:
+        print("🔑 Integrator pubkey: (ignored in MOCK)")
+    print(f"💸 Fees -> dev: {INTEGRATOR_DEV_FEE_BPS/100:.2f}% | "
+          f"ref tiers: {REF_TIER1_BPS/100:.2f}% / {REF_TIER2_BPS/100:.2f}% / {REF_TIER3_BPS/100:.2f}%")
+    print("=" * 60)
 
 
-def is_mock_mode() -> bool:
-    """Проверить включен ли MOCK режим"""
-    return USE_MOCK_MODE
-
-
-def is_real_mode() -> bool:
-    """Проверить включен ли REAL режим"""
-    return not USE_MOCK_MODE
-
-
-def print_config_summary():
-    """Вывести сводку конфигурации"""
-    print(f"""
-╔════════════════════════════════════════════════════════════╗
-║           🎭 SPARK WALLET BOT - CONFIGURATION              ║
-╚════════════════════════════════════════════════════════════╝
-
-📱 TELEGRAM:
-   Token: {TELEGRAM_BOT_TOKEN[:25]}...
-
-🎭 MODE:
-   {'✅ MOCK (Development)' if USE_MOCK_MODE else '❌ REAL (Production)'}
-
-📡 INTEGRATIONS:
-   Flashnet: {'✅ Enabled' if FLASHNET_ENABLED else '❌ Disabled'}
-   Lightspark: {'✅ Enabled' if LIGHTSPARK_ENABLED else '❌ Disabled'}
-
-🌐 APIs:
-   UTXO: {UTXO_API_URL}
-   BTC Price: {BTC_PRICE_API_URL}
-
-💾 STORAGE:
-   Wallets: {WALLETS_DIR}
-   Logs: {LOGS_DIR}
-
-📊 DEBUG:
-   Level: {LOG_LEVEL}
-   API Requests: {'✅ Enabled' if DEBUG_API_REQUESTS else '❌ Disabled'}
-
-{'='*60}
-    """)
-
-
-# Вывести сводку при загрузке
-print_config_summary()
+__all__ = [
+    "USE_MOCK_MODE", "FLASH_ENABLED",
+    "FLASHNET_API_BASE", "FLASHNET_INTEGRATOR_PUBLIC_KEY",
+    "HTTP_TIMEOUT_SECS", "HTTP_RETRIES", "HTTP_USER_AGENT",
+    "INTEGRATOR_DEV_FEE_BPS", "REF_TIER1_BPS", "REF_TIER2_BPS", "REF_TIER3_BPS",
+    "DEFAULT_SLIPPAGE_PERCENT", "MAX_BUY_BTC",
+    "is_mock_mode", "get_trading_mode", "print_boot_banner",
+]

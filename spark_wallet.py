@@ -628,64 +628,44 @@ class SparkWalletManager:
         )
 
     # ===== Реальная торговля через Flashnet AMM =====
-    async def buy_meme(self, contract_address: str, amount_sats: int, wallet_name: str, 
-                      slippage: float = 10.0, priority_fee_sats: int = 10000) -> Dict[str, Any]:
-        """
-        Покупка мем-токена через Flashnet AMM (NEW IMPLEMENTATION)
-        
-        Args:
-            contract_address: Адрес токена (btkn1...)
-            amount_sats: Сумма в satoshis
-            wallet_name: Имя кошелька
-            slippage: Процент проскальзывания (по умолчанию 10%)
-            priority_fee_sats: Дополнительная комиссия в satoshis (не используется в Flashnet)
-        
-        Returns:
-            dict с результатом покупки
-        """
-        # Валидация
-        if amount_sats <= 0:
-            raise ValueError("Сумма должна быть больше нуля (в сатоши)")
-        if wallet_name not in self.wallets:
-            raise ValueError("Кошелек не найден")
-        if slippage < 0.1 or slippage > 50:
-            raise ValueError("Slippage должен быть между 0.1% и 50%")
-
-        # Получаем данные кошелька
-        wallet_data = self.wallets.get(wallet_name)
-        if not wallet_data:
-            raise ValueError("Кошелек не найден")
-        
+    async def buy_meme(
+        self,
+        contract_address: str,
+        amount_sats: int,
+        wallet_name: str,
+        slippage: float = 10.0,
+        priority_fee_sats: int = 0,
+        user_id: int | None = None,
+    ):
         try:
-            # Используем новую интеграцию Flashnet AMM
-            from flashnet_integration import execute_buy
-            
-            print(f"[INFO] Buying token via Flashnet AMM (New Implementation)...")
-            print(f"  Token: {contract_address[:20]}...")
-            print(f"  Amount: {amount_sats} sats ({amount_sats / 100_000_000:.8f} BTC)")
-            print(f"  Slippage: {slippage}%")
-            
-            # Выполняем покупку через новую интеграцию
-            result = await execute_buy(
-                wallet_manager=self,
-                wallet_name=wallet_name,
-                token_address=contract_address,
-                amount_btc_sats=amount_sats,
-                slippage_pct=slippage
+            wallet = self.get_wallet(wallet_name)
+            if not wallet:
+                return {"status": "error", "error": f"Wallet '{wallet_name}' not found"}
+            from_address = wallet["address"]
+
+            result = await self.integration.buy_token(
+                contract_address=contract_address,
+                amount_sats=amount_sats,
+                from_address=from_address,
+                slippage_bps=int(round(slippage * 100)),
+                priority_fee_sats=priority_fee_sats,
+                user_id=user_id,
             )
-            
             return result
-            
         except Exception as e:
-            error_msg = str(e)
-            print(f"[ERROR] Buy failed: {error_msg}")
-            
-            # Пробрасываем понятные ошибки
-            if "connection" in error_msg.lower() or "timeout" in error_msg.lower():
-                raise Exception(f"Flashnet API недоступен. Проверьте подключение.")
-            if "pool not found" in error_msg.lower():
-                raise Exception(f"Пул для токена не найден. Токен может не торговаться на Flashnet.")
-            raise Exception(f"Ошибка при покупке: {error_msg}")
+            return {"status": "error", "error": str(e)}
+
+                
+        except Exception as e:
+                error_msg = str(e)
+                print(f"[ERROR] Buy failed: {error_msg}")
+                
+                # Обрабатываем понятные ошибки
+                if "connection" in error_msg.lower() or "timeout" in error_msg.lower():
+                    raise Exception(f"Flashnet API недоступен. Проверьте подключение.")
+                if "pool not found" in error_msg.lower():
+                    raise Exception(f"Пул для токена не найден. Токен может не торговаться на Flashnet.")
+                raise Exception(f"Ошибка при покупке: {error_msg}")
 
     async def get_wallet_balance(self, wallet_address: str) -> Dict[str, Any]:
         """
@@ -801,65 +781,45 @@ class SparkWalletManager:
         wallet_data = self.wallets[wallet_name]
         return await self.get_wallet_balance(wallet_data.address)
     
-    async def sell_meme(self, contract_address: str, amount_tokens: int, wallet_name: str,
-                       slippage: float = 10.0, priority_fee_sats: int = 10000) -> Dict[str, Any]:
-        """
-        Продажа мем-токена через Flashnet AMM (NEW IMPLEMENTATION)
-        
-        Args:
-            contract_address: Адрес токена (hex формат)
-            amount_tokens: Количество токенов для продажи
-            wallet_name: Имя кошелька
-            slippage: Процент проскальзывания (по умолчанию 10%)
-            priority_fee_sats: Дополнительная комиссия в satoshis (не используется в Flashnet)
-        
-        Returns:
-            dict с результатом продажи
-        """
-        # Валидация
-        if amount_tokens <= 0:
-            raise ValueError("Количество токенов должно быть больше нуля")
-        if wallet_name not in self.wallets:
-            raise ValueError("Кошелек не найден")
-        if slippage < 0.1 or slippage > 50:
-            raise ValueError("Slippage должен быть между 0.1% и 50%")
-
-        # Получаем данные кошелька
-        wallet_data = self.wallets.get(wallet_name)
-        if not wallet_data:
-            raise ValueError("Кошелек не найден")
-        
+    async def sell_meme(
+        self,
+        contract_address: str,
+        amount_tokens: int,
+        wallet_name: str,
+        slippage: float = 10.0,
+        priority_fee_sats: int = 0,
+        user_id: int | None = None,
+    ):
         try:
-            # Используем новую интеграцию Flashnet AMM
-            from flashnet_integration import execute_sell
-            
-            print(f"[INFO] Selling token via Flashnet AMM (New Implementation)...")
-            print(f"  Token: {contract_address[:20]}...")
-            print(f"  Amount: {amount_tokens} tokens")
-            print(f"  Slippage: {slippage}%")
-            
-            # Выполняем продажу через новую интеграцию
-            result = await execute_sell(
-                wallet_manager=self,
-                wallet_name=wallet_name,
-                token_address=contract_address,
+            wallet = self.get_wallet(wallet_name)
+            if not wallet:
+                return {"status": "error", "error": f"Wallet '{wallet_name}' not found"}
+            from_address = wallet["address"]
+
+            result = await self.integration.sell_token(
+                contract_address=contract_address,
                 amount_tokens=amount_tokens,
-                slippage_pct=slippage
+                from_address=from_address,
+                slippage_bps=int(round(slippage * 100)),
+                priority_fee_sats=priority_fee_sats,
+                user_id=user_id,
             )
-            
             return result
-            
         except Exception as e:
-            error_msg = str(e)
-            print(f"[ERROR] Sell failed: {error_msg}")
+            return {"status": "error", "error": str(e)}
+
+                
+        except Exception as e:
+                error_msg = str(e)
+                print(f"[e] Sell failed: {error_msg}")
+                
+                # Обрабатываем понятные ошибки
+                if "connection" in error_msg.lower() or "timeout" in error_msg.lower():
+                    raise Exception(f"Flashnet API недоступен. Проверьте подключение.")
+                if "pool not found" in error_msg.lower():
+                    raise Exception(f"Пул для токена не найден. Токен может не торговаться на Flashnet.")
+                raise Exception(f"Ошибка при продаже: {error_msg}")
             
-            # Пробрасываем понятные ошибки
-            if "connection" in error_msg.lower() or "timeout" in error_msg.lower():
-                raise Exception(f"Flashnet API недоступен. Проверьте подключение.")
-            if "pool not found" in error_msg.lower():
-                raise Exception(f"Пул для токена не найден. Токен может не торговаться на Flashnet.")
-            raise Exception(f"Ошибка при продаже: {error_msg}")
-    
     def _save_wallets(self) -> None:
         """Сохранить кошельки в файл"""
         wallets_dict = {}

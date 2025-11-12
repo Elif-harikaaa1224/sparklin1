@@ -2,7 +2,8 @@
 SPARK Telegram Bot
 Telegram-интерфейс для управления кошельками SPARK L2
 """
-
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import json
 import os
 import sys
